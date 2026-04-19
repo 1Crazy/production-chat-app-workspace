@@ -1,0 +1,28 @@
+# General
+.DS_Store
+*.log
+*.tmp
+
+# Node / pnpm
+node_modules/
+pnpm-lock.yaml
+
+# NestJS build output
+server/dist/
+server/coverage/
+
+# Flutter / Dart
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+
+# IDE
+.idea/
+.vscode/
+
+# Local environment overrides
+server/.env
+server/.env.local
+mobile/config/env/*.local.json

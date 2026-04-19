@@ -1,0 +1,5 @@
+{
+  "APP_NAME": "Production Chat",
+  "APP_FLAVOR": "production",
+  "API_BASE_URL": "https://api.example.com"
+}

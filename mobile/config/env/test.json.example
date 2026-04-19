@@ -1,0 +1,5 @@
+{
+  "APP_NAME": "Production Chat Test",
+  "APP_FLAVOR": "test",
+  "API_BASE_URL": "http://localhost:3001"
+}

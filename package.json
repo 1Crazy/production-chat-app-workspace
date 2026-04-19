@@ -1,0 +1,12 @@
+{
+  "name": "production-chat-app-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.8.0",
+  "scripts": {
+    "analyze:mobile": "cd mobile && flutter analyze",
+    "test:mobile": "cd mobile && flutter test",
+    "lint:server": "pnpm --dir server lint",
+    "test:server": "pnpm --dir server test",
+    "typecheck:server": "pnpm --dir server typecheck"
+  }
+}
