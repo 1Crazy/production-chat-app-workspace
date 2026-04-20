@@ -5,9 +5,10 @@ import { ConversationsService } from './services/conversations.service';
 
 import { DatabaseModule } from '@app/infra/database/database.module';
 import { AuthModule } from '@app/modules/auth/auth.module';
+import { RealtimeModule } from '@app/modules/realtime/realtime.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule],
+  imports: [DatabaseModule, AuthModule, RealtimeModule],
   controllers: [ConversationsController],
   providers: [ConversationsService],
   exports: [ConversationsService],

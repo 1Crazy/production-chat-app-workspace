@@ -1,0 +1,16 @@
+.git
+.github
+.omx
+.codex
+.cursor
+.trae
+.DS_Store
+node_modules
+mobile/.dart_tool
+mobile/build
+server/node_modules
+server/dist
+server/coverage
+server/.env
+server/.env.local
+*.log

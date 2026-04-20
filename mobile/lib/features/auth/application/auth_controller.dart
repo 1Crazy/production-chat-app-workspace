@@ -1,15 +1,28 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:production_chat_app/features/auth/application/auth_status.dart';
 import 'package:production_chat_app/features/auth/domain/entities/auth_code_receipt.dart';
 import 'package:production_chat_app/features/auth/domain/entities/auth_session.dart';
 import 'package:production_chat_app/features/auth/domain/entities/device_session.dart';
 import 'package:production_chat_app/features/auth/domain/repositories/auth_repository.dart';
+import 'package:production_chat_app/shared/notifications/push_registration_service.dart';
 
 class AuthController extends ChangeNotifier {
-  AuthController({required AuthRepository authRepository})
-    : _authRepository = authRepository;
+  AuthController({
+    required AuthRepository authRepository,
+    required PushRegistrationService pushRegistrationService,
+  }) : _authRepository = authRepository,
+       _pushRegistrationService = pushRegistrationService {
+    _pushTokenRefreshSubscription = _pushRegistrationService.tokenRefreshStream
+        .listen((_) {
+          unawaited(_syncPushRegistration());
+        });
+  }
 
   final AuthRepository _authRepository;
+  final PushRegistrationService _pushRegistrationService;
+  late final StreamSubscription<void> _pushTokenRefreshSubscription;
 
   AuthStatus _status = AuthStatus.bootstrapping;
   AuthSession? _authSession;
@@ -70,6 +83,7 @@ class AuthController extends ChangeNotifier {
         deviceName: deviceName,
       );
       _status = AuthStatus.authenticated;
+      await _syncPushRegistration();
       await loadDeviceSessions(silent: true);
     });
   }
@@ -87,6 +101,7 @@ class AuthController extends ChangeNotifier {
         deviceName: deviceName,
       );
       _status = AuthStatus.authenticated;
+      await _syncPushRegistration();
       await loadDeviceSessions(silent: true);
     });
   }
@@ -108,6 +123,7 @@ class AuthController extends ChangeNotifier {
         refreshToken: currentSession.refreshToken,
       );
       _status = AuthStatus.authenticated;
+      await _syncPushRegistration();
       await loadDeviceSessions(silent: true);
     } catch (error) {
       _errorMessage = error.toString();
@@ -214,5 +230,27 @@ class AuthController extends ChangeNotifier {
     _status = AuthStatus.unauthenticated;
     _errorMessage = message;
     notifyListeners();
+  }
+
+  Future<void> _syncPushRegistration() async {
+    final currentSession = _authSession;
+
+    if (currentSession == null) {
+      return;
+    }
+
+    try {
+      await _pushRegistrationService.syncPushRegistration(
+        accessToken: currentSession.accessToken,
+      );
+    } catch (_) {
+      // 推送令牌登记失败不阻塞登录主链路，后续 refresh / re-login 会继续尝试。
+    }
+  }
+
+  @override
+  void dispose() {
+    _pushTokenRefreshSubscription.cancel();
+    super.dispose();
   }
 }

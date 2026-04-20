@@ -1,16 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import type { AuthUserEntity } from '../entities/auth-user.entity';
-import { InMemoryAuthRepository } from '../repositories/in-memory-auth.repository';
+import { AuthRepository } from '../repositories/auth.repository';
 
 @Injectable()
 export class AuthIdentityService {
   constructor(
-    private readonly authRepository: InMemoryAuthRepository,
+    private readonly authRepository: AuthRepository,
   ) {}
 
-  getActiveUserById(userId: string): AuthUserEntity {
-    const user = this.authRepository.findActiveUserById(userId);
+  async getActiveUserById(userId: string): Promise<AuthUserEntity> {
+    const user = await this.authRepository.findActiveUserById(userId);
 
     if (!user) {
       throw new NotFoundException('用户不存在或已失效');
@@ -19,23 +19,25 @@ export class AuthIdentityService {
     return user;
   }
 
-  findDiscoverableUserByHandle(handle: string): AuthUserEntity | null {
+  findDiscoverableUserByHandle(
+    handle: string,
+  ): Promise<AuthUserEntity | null> {
     return this.authRepository.findUserByHandle(handle);
   }
 
-  findActiveUserByHandle(handle: string): AuthUserEntity | null {
+  findActiveUserByHandle(handle: string): Promise<AuthUserEntity | null> {
     return this.authRepository.findActiveUserByHandle(handle);
   }
 
-  updateProfile(
+  async updateProfile(
     userId: string,
     params: {
       nickname?: string;
       avatarUrl?: string | null;
       discoveryMode?: 'public' | 'private';
     },
-  ): AuthUserEntity {
-    const user = this.getActiveUserById(userId);
+  ): Promise<AuthUserEntity> {
+    const user = await this.getActiveUserById(userId);
 
     if (params.nickname != null) {
       user.nickname = params.nickname;
@@ -50,7 +52,7 @@ export class AuthIdentityService {
     }
 
     user.updatedAt = new Date();
-    this.authRepository.saveUser(user);
+    await this.authRepository.saveUser(user);
     return user;
   }
 }

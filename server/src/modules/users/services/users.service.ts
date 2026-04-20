@@ -22,16 +22,16 @@ export class UsersService {
     };
   }
 
-  getMyProfile(userId: string): UserProfileDto {
-    return toUserProfileDto(this.authIdentityService.getActiveUserById(userId));
+  async getMyProfile(userId: string): Promise<UserProfileDto> {
+    return toUserProfileDto(await this.authIdentityService.getActiveUserById(userId));
   }
 
-  updateMyProfile(
+  async updateMyProfile(
     userId: string,
     dto: UpdateMyProfileDto,
-  ): UserProfileDto {
+  ): Promise<UserProfileDto> {
     return toUserProfileDto(
-      this.authIdentityService.updateProfile(userId, {
+      await this.authIdentityService.updateProfile(userId, {
         nickname: dto.nickname?.trim(),
         avatarUrl: dto.avatarUrl?.trim() || dto.avatarUrl,
         discoveryMode: dto.discoveryMode,
@@ -39,11 +39,11 @@ export class UsersService {
     );
   }
 
-  discoverByHandle(
+  async discoverByHandle(
     requesterUserId: string,
     handle: string,
-  ): DiscoverableUserDto {
-    const user = this.authIdentityService.findDiscoverableUserByHandle(
+  ): Promise<DiscoverableUserDto> {
+    const user = await this.authIdentityService.findDiscoverableUserByHandle(
       handle.trim(),
     );
 

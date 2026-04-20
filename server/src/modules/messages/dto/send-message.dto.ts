@@ -15,8 +15,8 @@ export class SendMessageDto {
   @Length(8, 80)
   clientMessageId!: string;
 
-  @IsIn(['text', 'image', 'file'])
-  type!: 'text' | 'image' | 'file';
+  @IsIn(['text', 'image', 'audio', 'file'])
+  type!: 'text' | 'image' | 'audio' | 'file';
 
   @ValidateIf((value) => value.type === 'text')
   @IsString()

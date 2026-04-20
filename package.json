@@ -5,7 +5,15 @@
   "scripts": {
     "analyze:mobile": "cd mobile && flutter analyze",
     "test:mobile": "cd mobile && flutter test",
+    "infra:up": "docker compose -f docker/compose.infra.yml up -d",
+    "infra:down": "docker compose -f docker/compose.infra.yml down",
+    "infra:logs": "docker compose -f docker/compose.infra.yml logs -f",
     "lint:server": "pnpm --dir server lint",
+    "dev:server:docker-local": "pnpm --dir server start:dev:docker-local",
+    "migrate:server:docker-local": "pnpm --dir server prisma:migrate:dev:docker-local",
+    "stack:up": "docker compose -f docker/compose.stack.yml up -d --build",
+    "stack:down": "docker compose -f docker/compose.stack.yml down",
+    "stack:logs": "docker compose -f docker/compose.stack.yml logs -f",
     "test:server": "pnpm --dir server test",
     "typecheck:server": "pnpm --dir server typecheck"
   }

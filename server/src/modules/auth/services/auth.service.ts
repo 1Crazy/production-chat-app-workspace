@@ -1,9 +1,11 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  forwardRef,
 } from '@nestjs/common';
 
 import type { AuthResponseDto, DeviceSessionView } from '../dto/auth-response.dto';
@@ -14,18 +16,22 @@ import type { RegisterDto } from '../dto/register.dto';
 import type { RequestAuthCodeDto } from '../dto/request-auth-code.dto';
 import type { AuthUserEntity } from '../entities/auth-user.entity';
 import type { DeviceSessionEntity } from '../entities/device-session.entity';
-import { InMemoryAuthRepository } from '../repositories/in-memory-auth.repository';
+import { AuthRepository } from '../repositories/auth.repository';
 import type { AuthenticatedRequest } from '../types/authenticated-request.type';
 
 import { AuthTokenService } from './auth-token.service';
+
+import { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 
 @Injectable()
 export class AuthService {
   private readonly verificationCodeTtlSeconds = 60 * 10;
 
   constructor(
-    private readonly authRepository: InMemoryAuthRepository,
+    private readonly authRepository: AuthRepository,
     private readonly authTokenService: AuthTokenService,
+    @Inject(forwardRef(() => ChatGateway))
+    private readonly chatGateway: ChatGateway,
   ) {}
 
   getHealth(): { module: string; status: string } {
@@ -35,16 +41,20 @@ export class AuthService {
     };
   }
 
-  requestCode(
+  async requestCode(
     dto: RequestAuthCodeDto,
-  ): { identifier: string; debugCode: string; expiresInSeconds: number } {
+  ): Promise<{
+    identifier: string;
+    debugCode: string;
+    expiresInSeconds: number;
+  }> {
     const normalizedIdentifier = dto.identifier.trim().toLowerCase();
     const verificationCode = this.generateVerificationCode();
     const expiresAt = new Date(
       Date.now() + this.verificationCodeTtlSeconds * 1000,
     );
 
-    this.authRepository.createVerificationCode(
+    await this.authRepository.createVerificationCode(
       normalizedIdentifier,
       verificationCode,
       expiresAt,
@@ -57,20 +67,20 @@ export class AuthService {
     };
   }
 
-  register(dto: RegisterDto): AuthResponseDto {
+  async register(dto: RegisterDto): Promise<AuthResponseDto> {
     const identifier = dto.identifier.trim().toLowerCase();
 
-    if (this.authRepository.findUserByIdentifier(identifier)) {
+    if (await this.authRepository.findUserByIdentifier(identifier)) {
       throw new ConflictException('该标识已完成注册');
     }
 
-    this.assertVerificationCode(identifier, dto.code);
-    const user = this.authRepository.createUser({
+    await this.assertVerificationCode(identifier, dto.code);
+    const user = await this.authRepository.createUser({
       identifier,
       nickname: dto.nickname.trim(),
-      handle: this.buildHandle(identifier),
+      handle: await this.buildUniqueHandle(identifier),
     });
-    const session = this.authRepository.createSession({
+    const session = await this.authRepository.createSession({
       userId: user.id,
       deviceName: dto.deviceName?.trim() || 'flutter-device',
       refreshNonce: this.authTokenService.issueRefreshNonce(),
@@ -79,16 +89,16 @@ export class AuthService {
     return this.buildAuthResponse(user, session);
   }
 
-  login(dto: LoginDto): AuthResponseDto {
+  async login(dto: LoginDto): Promise<AuthResponseDto> {
     const identifier = dto.identifier.trim().toLowerCase();
-    const user = this.authRepository.findUserByIdentifier(identifier);
+    const user = await this.authRepository.findUserByIdentifier(identifier);
 
     if (!user || user.disabledAt) {
       throw new NotFoundException('账号不存在或已被禁用');
     }
 
-    this.assertVerificationCode(identifier, dto.code);
-    const session = this.authRepository.createSession({
+    await this.assertVerificationCode(identifier, dto.code);
+    const session = await this.authRepository.createSession({
       userId: user.id,
       deviceName: dto.deviceName?.trim() || 'flutter-device',
       refreshNonce: this.authTokenService.issueRefreshNonce(),
@@ -97,10 +107,10 @@ export class AuthService {
     return this.buildAuthResponse(user, session);
   }
 
-  refresh(dto: RefreshTokenDto): AuthResponseDto {
+  async refresh(dto: RefreshTokenDto): Promise<AuthResponseDto> {
     const payload = this.authTokenService.verifyRefreshToken(dto.refreshToken);
-    const session = this.authRepository.findActiveSessionById(payload.sid);
-    const user = this.authRepository.findActiveUserById(payload.sub);
+    const session = await this.authRepository.findActiveSessionById(payload.sid);
+    const user = await this.authRepository.findActiveUserById(payload.sub);
 
     if (!session || !user || session.userId !== user.id) {
       throw new UnauthorizedException('刷新会话不存在或已失效');
@@ -112,14 +122,14 @@ export class AuthService {
 
     session.refreshNonce = this.authTokenService.issueRefreshNonce();
     session.lastSeenAt = new Date();
-    this.authRepository.saveSession(session);
+    await this.authRepository.saveSession(session);
     return this.buildAuthResponse(user, session);
   }
 
-  getCurrentProfile(request: AuthenticatedRequest): {
+  async getCurrentProfile(request: AuthenticatedRequest): Promise<{
     user: ReturnType<typeof toAuthUserView>;
     currentSession: DeviceSessionView;
-  } {
+  }> {
     return {
       user: toAuthUserView(request.auth.user),
       currentSession: toDeviceSessionView(
@@ -129,40 +139,59 @@ export class AuthService {
     };
   }
 
-  listSessions(request: AuthenticatedRequest): DeviceSessionView[] {
-    return this.authRepository
-      .listActiveSessionsByUserId(request.auth.user.id)
-      .map((session) => {
-        return toDeviceSessionView(session, request.auth.session.id);
-      });
+  async listSessions(
+    request: AuthenticatedRequest,
+  ): Promise<DeviceSessionView[]> {
+    const sessions = await this.authRepository.listActiveSessionsByUserId(
+      request.auth.user.id,
+    );
+
+    return sessions.map((session) => {
+      return toDeviceSessionView(session, request.auth.session.id);
+    });
   }
 
-  revokeSession(request: AuthenticatedRequest, sessionId: string): {
+  async revokeSession(
+    request: AuthenticatedRequest,
+    sessionId: string,
+  ): Promise<{
     success: boolean;
     revokedSessionId: string;
-  } {
-    const targetSession = this.authRepository.findActiveSessionById(sessionId);
+  }> {
+    const targetSession = await this.authRepository.findActiveSessionById(
+      sessionId,
+    );
 
     if (!targetSession || targetSession.userId !== request.auth.user.id) {
       throw new NotFoundException('设备会话不存在');
     }
 
-    this.authRepository.revokeSession(sessionId);
+    await this.authRepository.revokeSession(sessionId);
+    // 设备会话一旦被撤销，对应长连接也必须立即下线，避免继续接收实时事件。
+    await this.chatGateway.disconnectSession(sessionId);
     return {
       success: true,
       revokedSessionId: sessionId,
     };
   }
 
-  logout(request: AuthenticatedRequest): { success: boolean } {
-    this.authRepository.revokeSession(request.auth.session.id);
+  async logout(
+    request: AuthenticatedRequest,
+  ): Promise<{ success: boolean }> {
+    await this.authRepository.revokeSession(request.auth.session.id);
+    await this.chatGateway.disconnectSession(request.auth.session.id, 'logout');
     return {
       success: true,
     };
   }
 
-  private assertVerificationCode(identifier: string, code: string): void {
-    const verificationCode = this.authRepository.findVerificationCode(identifier);
+  private async assertVerificationCode(
+    identifier: string,
+    code: string,
+  ): Promise<void> {
+    const verificationCode = await this.authRepository.findVerificationCode(
+      identifier,
+    );
 
     if (!verificationCode) {
       throw new BadRequestException('请先获取验证码');
@@ -181,7 +210,7 @@ export class AuthService {
     }
 
     verificationCode.consumedAt = new Date();
-    this.authRepository.saveVerificationCode(verificationCode);
+    await this.authRepository.saveVerificationCode(verificationCode);
   }
 
   private buildAuthResponse(
@@ -203,11 +232,26 @@ export class AuthService {
     };
   }
 
-  private buildHandle(identifier: string): string {
-    return identifier
+  private async buildUniqueHandle(identifier: string): Promise<string> {
+    const baseHandle = identifier
       .replace(/[^a-zA-Z0-9]+/g, '_')
       .replace(/^_+|_+$/g, '')
       .slice(0, 24);
+
+    const normalizedBaseHandle = baseHandle || 'user';
+
+    for (let suffix = 0; suffix < 1000; suffix += 1) {
+      const handle =
+        suffix === 0
+          ? normalizedBaseHandle
+          : `${normalizedBaseHandle.slice(0, 24 - `_${suffix}`.length)}_${suffix}`;
+
+      if (!(await this.authRepository.findUserByHandle(handle))) {
+        return handle;
+      }
+    }
+
+    throw new ConflictException('系统暂时无法分配唯一标识，请稍后重试');
   }
 
   private generateVerificationCode(): string {

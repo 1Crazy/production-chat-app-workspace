@@ -19,9 +19,9 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  await app.listen(config.port);
+  await app.listen(config.port, '0.0.0.0');
   Logger.log(
-    `${config.appName} started on http://localhost:${config.port}`,
+    `${config.appName} started on http://0.0.0.0:${config.port}`,
     'Bootstrap',
   );
 }

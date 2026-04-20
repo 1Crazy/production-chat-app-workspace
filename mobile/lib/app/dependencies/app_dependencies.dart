@@ -3,23 +3,51 @@ import 'package:production_chat_app/features/auth/data/datasources/auth_local_da
 import 'package:production_chat_app/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:production_chat_app/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:production_chat_app/features/auth/domain/repositories/auth_repository.dart';
+import 'package:production_chat_app/features/chat/data/datasources/chat_remote_data_source.dart';
+import 'package:production_chat_app/features/chat/data/repositories/chat_repository_impl.dart';
+import 'package:production_chat_app/features/chat/domain/repositories/chat_repository.dart';
+import 'package:production_chat_app/features/conversation/data/datasources/conversation_remote_data_source.dart';
+import 'package:production_chat_app/features/conversation/data/repositories/conversation_repository_impl.dart';
+import 'package:production_chat_app/features/conversation/domain/repositories/conversation_repository.dart';
 import 'package:production_chat_app/features/profile/data/datasources/profile_remote_data_source.dart';
 import 'package:production_chat_app/features/profile/data/repositories/profile_repository_impl.dart';
 import 'package:production_chat_app/features/profile/domain/repositories/profile_repository.dart';
 import 'package:production_chat_app/shared/config/app_environment.dart';
 import 'package:production_chat_app/shared/network/api_client.dart';
+import 'package:production_chat_app/shared/notifications/notification_remote_data_source.dart';
+import 'package:production_chat_app/shared/notifications/push_notification_service.dart';
+import 'package:production_chat_app/shared/notifications/push_registration_service.dart';
+import 'package:production_chat_app/shared/notifications/push_registration_service_impl.dart';
+import 'package:production_chat_app/shared/notifications/push_token_provider.dart';
+import 'package:production_chat_app/shared/realtime/chat_realtime.dart';
+import 'package:production_chat_app/shared/realtime/chat_realtime_service.dart';
 import 'package:production_chat_app/shared/storage/key_value_store.dart';
 
 class AppDependencies {
   const AppDependencies({
     required this.authRepository,
+    required this.chatRepository,
+    required this.chatRealtime,
+    required this.conversationRepository,
+    required this.firebaseReady,
     required this.profileRepository,
+    required this.pushNotificationService,
+    required this.pushRegistrationService,
   });
 
   final AuthRepository authRepository;
+  final ChatRepository chatRepository;
+  final ChatRealtime chatRealtime;
+  final ConversationRepository conversationRepository;
+  final bool firebaseReady;
   final ProfileRepository profileRepository;
+  final PushNotificationService pushNotificationService;
+  final PushRegistrationService pushRegistrationService;
 
-  static Future<AppDependencies> create(AppEnvironment environment) async {
+  static Future<AppDependencies> create(
+    AppEnvironment environment, {
+    required bool firebaseReady,
+  }) async {
     final sharedPreferences = await SharedPreferences.getInstance();
     final keyValueStore = KeyValueStore(sharedPreferences: sharedPreferences);
     final apiClient = ApiClient(baseUrl: environment.apiBaseUrl);
@@ -29,8 +57,21 @@ class AppDependencies {
         remoteDataSource: AuthRemoteDataSource(apiClient: apiClient),
         localDataSource: AuthLocalDataSource(keyValueStore: keyValueStore),
       ),
+      chatRepository: ChatRepositoryImpl(
+        remoteDataSource: ChatRemoteDataSource(apiClient: apiClient),
+      ),
+      chatRealtime: ChatRealtimeService(baseUrl: environment.apiBaseUrl),
+      conversationRepository: ConversationRepositoryImpl(
+        remoteDataSource: ConversationRemoteDataSource(apiClient: apiClient),
+      ),
+      firebaseReady: firebaseReady,
       profileRepository: ProfileRepositoryImpl(
         remoteDataSource: ProfileRemoteDataSource(apiClient: apiClient),
+      ),
+      pushNotificationService: FirebasePushNotificationService(),
+      pushRegistrationService: PushRegistrationServiceImpl(
+        remoteDataSource: NotificationRemoteDataSource(apiClient: apiClient),
+        pushTokenProvider: FirebaseMessagingPushTokenProvider(),
       ),
     );
   }

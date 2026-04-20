@@ -13,6 +13,7 @@ server/coverage/
 
 # Flutter / Dart
 mobile/.dart_tool/
+mobile/.gradle/
 mobile/build/
 mobile/.flutter-plugins
 mobile/.flutter-plugins-dependencies
@@ -26,3 +27,5 @@ mobile/.packages
 server/.env
 server/.env.local
 mobile/config/env/*.local.json
+docker/.env.stack
+.omx/

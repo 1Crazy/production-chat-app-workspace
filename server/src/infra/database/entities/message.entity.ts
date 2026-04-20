@@ -1,4 +1,4 @@
-export type MessageType = 'text' | 'image' | 'file' | 'system';
+export type MessageType = 'text' | 'image' | 'audio' | 'file' | 'system';
 export type MessageStatus = 'processing' | 'sent' | 'failed';
 
 export interface MessageEntity {

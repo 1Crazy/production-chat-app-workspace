@@ -19,12 +19,36 @@ export class AppConfigService {
     return this.getOrThrow('port');
   }
 
+  get databaseUrl(): string {
+    return this.getOrThrow('databaseUrl');
+  }
+
+  get redisUrl(): string {
+    return this.getOrThrow('redisUrl');
+  }
+
   get jwtAccessSecret(): string {
     return this.getOrThrow('jwtAccessSecret');
   }
 
   get jwtRefreshSecret(): string {
     return this.getOrThrow('jwtRefreshSecret');
+  }
+
+  get s3Endpoint(): string {
+    return this.getOrThrow('s3Endpoint');
+  }
+
+  get s3Bucket(): string {
+    return this.getOrThrow('s3Bucket');
+  }
+
+  get s3AccessKey(): string {
+    return this.getOrThrow('s3AccessKey');
+  }
+
+  get s3SecretKey(): string {
+    return this.getOrThrow('s3SecretKey');
   }
 
   private getOrThrow<Key extends keyof AppEnvironment>(

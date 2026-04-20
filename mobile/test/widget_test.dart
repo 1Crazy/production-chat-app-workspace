@@ -1,170 +1,243 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:production_chat_app/app/dependencies/app_dependencies.dart';
-import 'package:production_chat_app/app/app.dart';
-import 'package:production_chat_app/features/auth/application/auth_controller.dart';
-import 'package:production_chat_app/features/auth/domain/entities/auth_code_receipt.dart';
-import 'package:production_chat_app/features/auth/domain/entities/auth_session.dart';
-import 'package:production_chat_app/features/auth/domain/entities/auth_user.dart';
-import 'package:production_chat_app/features/auth/domain/entities/device_session.dart';
-import 'package:production_chat_app/features/auth/domain/repositories/auth_repository.dart';
-import 'package:production_chat_app/features/profile/domain/entities/discoverable_user.dart';
-import 'package:production_chat_app/features/profile/domain/entities/user_profile.dart';
-import 'package:production_chat_app/features/profile/domain/repositories/profile_repository.dart';
-import 'package:production_chat_app/shared/config/app_environment.dart';
+import 'package:production_chat_app/features/chat/domain/entities/chat_message.dart';
+import 'package:production_chat_app/features/chat/presentation/widgets/chat_message_bubble.dart';
+import 'package:production_chat_app/features/conversation/domain/entities/conversation_summary.dart';
+import 'package:production_chat_app/features/conversation/domain/repositories/conversation_repository.dart';
+import 'package:production_chat_app/features/conversation/presentation/pages/conversation_list_page.dart';
+import 'package:production_chat_app/shared/realtime/chat_realtime.dart';
+import 'package:production_chat_app/shared/realtime/chat_realtime_event.dart';
 
 void main() {
-  testWidgets('app shell renders project name', (tester) async {
-    final authController = AuthController(
-      authRepository: _FakeAuthRepository(),
-    );
-    await authController.bootstrap();
+  testWidgets('conversation list renders remote conversations', (tester) async {
+    ConversationSummary? selectedConversation;
 
     await tester.pumpWidget(
-      ProductionChatApp(
-        environment: const AppEnvironment(
-          appName: 'Production Chat',
-          flavor: 'test',
-          apiBaseUrl: 'http://localhost:3001',
+      MaterialApp(
+        home: Scaffold(
+          body: ConversationListPage(
+            accessToken: 'access-token',
+            conversationRepository: _FakeConversationRepository(),
+            chatRealtime: _FakeChatRealtime(),
+            currentUserId: 'current-user-id',
+            selectedConversationId: null,
+            isVisible: true,
+            reloadToken: 0,
+            onConversationSelected: (conversation) {
+              selectedConversation = conversation;
+            },
+          ),
         ),
-        dependencies: AppDependencies(
-          authRepository: _FakeAuthRepository(),
-          profileRepository: _FakeProfileRepository(),
-        ),
-        authController: authController,
       ),
     );
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Production Chat'), findsWidgets);
-    expect(find.text('会话'), findsOneWidget);
+    expect(find.text('Demo User'), findsOneWidget);
+    expect(find.text('你好'), findsOneWidget);
+
+    await tester.tap(find.text('Demo User'));
+
+    expect(selectedConversation?.id, 'conversation-id');
+  });
+
+  testWidgets('chat message bubble renders media cards', (tester) async {
+    Future<void> pumpMessage(ChatMessage message) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChatMessageBubble(message: message, isMine: false),
+          ),
+        ),
+      );
+    }
+
+    await pumpMessage(
+      ChatMessage(
+        clientMessageId: 'image-1',
+        conversationId: 'conversation-id',
+        senderId: 'peer-id',
+        senderName: 'Peer',
+        messageKind: ChatMessageKind.image,
+        content: const ChatMediaMessageContent(
+          attachmentId: 'attachment-image',
+          attachmentKind: ChatMessageKind.image,
+          attachmentStatus: ChatMediaAttachmentStatus.processing,
+          fileName: 'photo.png',
+          mimeType: 'image/png',
+          sizeBytes: 2048,
+        ),
+        deliveryState: ChatMessageDeliveryState.sent,
+        createdAt: DateTime(2026, 1, 1),
+        updatedAt: DateTime(2026, 1, 1),
+      ),
+    );
+
+    expect(find.text('photo.png'), findsWidgets);
+    expect(find.text('处理中'), findsOneWidget);
+    expect(find.text('附件处理中，稍后可用'), findsOneWidget);
+
+    await pumpMessage(
+      ChatMessage(
+        clientMessageId: 'audio-1',
+        conversationId: 'conversation-id',
+        senderId: 'peer-id',
+        senderName: 'Peer',
+        messageKind: ChatMessageKind.audio,
+        content: const ChatMediaMessageContent(
+          attachmentId: 'attachment-audio',
+          attachmentKind: ChatMessageKind.audio,
+          attachmentStatus: ChatMediaAttachmentStatus.ready,
+          fileName: 'voice.m4a',
+          mimeType: 'audio/mp4',
+          sizeBytes: 4096,
+        ),
+        deliveryState: ChatMessageDeliveryState.sent,
+        createdAt: DateTime(2026, 1, 1),
+        updatedAt: DateTime(2026, 1, 1),
+      ),
+    );
+
+    expect(find.text('voice.m4a'), findsOneWidget);
+    expect(find.text('可用'), findsOneWidget);
+    expect(find.text('附件已处理完成'), findsOneWidget);
+
+    await pumpMessage(
+      ChatMessage(
+        clientMessageId: 'file-1',
+        conversationId: 'conversation-id',
+        senderId: 'peer-id',
+        senderName: 'Peer',
+        messageKind: ChatMessageKind.file,
+        content: const ChatMediaMessageContent(
+          attachmentId: 'attachment-file',
+          attachmentKind: ChatMessageKind.file,
+          attachmentStatus: ChatMediaAttachmentStatus.ready,
+          fileName: 'report.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 8192,
+        ),
+        deliveryState: ChatMessageDeliveryState.sent,
+        createdAt: DateTime(2026, 1, 1),
+        updatedAt: DateTime(2026, 1, 1),
+      ),
+    );
+
+    expect(find.text('report.pdf'), findsOneWidget);
+    expect(find.textContaining('application/pdf'), findsOneWidget);
+
+    await pumpMessage(
+      ChatMessage(
+        clientMessageId: 'file-2',
+        conversationId: 'conversation-id',
+        senderId: 'peer-id',
+        senderName: 'Peer',
+        messageKind: ChatMessageKind.file,
+        content: const ChatMediaMessageContent(
+          attachmentId: 'attachment-file-failed',
+          attachmentKind: ChatMessageKind.file,
+          attachmentStatus: ChatMediaAttachmentStatus.failed,
+          fileName: 'broken.zip',
+          mimeType: 'application/zip',
+          sizeBytes: 5120,
+        ),
+        deliveryState: ChatMessageDeliveryState.sent,
+        createdAt: DateTime(2026, 1, 1),
+        updatedAt: DateTime(2026, 1, 1),
+      ),
+    );
+
+    expect(find.text('处理失败'), findsOneWidget);
+    expect(find.text('附件处理失败，请稍后重试'), findsOneWidget);
   });
 }
 
-class _FakeAuthRepository implements AuthRepository {
+class _FakeConversationRepository implements ConversationRepository {
   @override
-  Future<void> clear() async {}
-
-  @override
-  Future<AuthSession?> restore() async {
-    return _fakeSession();
-  }
-
-  @override
-  Future<AuthCodeReceipt> requestCode({required String identifier}) async {
-    return AuthCodeReceipt(
-      identifier: identifier,
-      debugCode: '123456',
-      expiresInSeconds: 60,
-    );
-  }
-
-  @override
-  Future<AuthSession> register({
-    required String identifier,
-    required String code,
-    required String nickname,
-    required String deviceName,
-  }) {
-    return Future.value(_fakeSession());
-  }
-
-  @override
-  Future<AuthSession> login({
-    required String identifier,
-    required String code,
-    required String deviceName,
-  }) {
-    return Future.value(_fakeSession());
-  }
-
-  @override
-  Future<AuthSession> refresh({required String refreshToken}) {
-    return Future.value(_fakeSession());
-  }
-
-  @override
-  Future<List<DeviceSession>> listSessions({
+  Future<List<ConversationSummary>> fetchRecent({
     required String accessToken,
   }) async {
-    return const [];
+    return [
+      ConversationSummary(
+        id: 'conversation-id',
+        type: 'direct',
+        title: 'Demo User',
+        memberCount: 2,
+        lastMessagePreview: '你好',
+        latestSequence: 1,
+        unreadCount: 2,
+        updatedAt: DateTime(2026, 1, 1),
+        lastMessageAt: DateTime(2026, 1, 1),
+      ),
+    ];
   }
 
   @override
-  Future<void> logout({required String accessToken}) async {}
+  Future<ConversationSummary?> findById({
+    required String accessToken,
+    required String conversationId,
+  }) async {
+    final conversations = await fetchRecent(accessToken: accessToken);
+
+    for (final conversation in conversations) {
+      if (conversation.id == conversationId) {
+        return conversation;
+      }
+    }
+
+    return null;
+  }
 
   @override
-  Future<void> revokeSession({
+  Future<String> createOrReuseDirectConversation({
     required String accessToken,
-    required String sessionId,
-  }) async {}
-
-  AuthSession _fakeSession() {
-    return AuthSession(
-      accessToken: 'access',
-      refreshToken: 'refresh',
-      user: const AuthUser(
-        id: 'user-id',
-        identifier: 'demo_user',
-        nickname: 'Demo User',
-        handle: 'demo_user',
-        avatarUrl: null,
-        discoveryMode: 'public',
-      ),
-      currentSession: DeviceSession(
-        id: 'session-id',
-        deviceName: 'test-device',
-        createdAt: DateTime(2026, 1, 1),
-        lastSeenAt: DateTime(2026, 1, 1),
-        isCurrent: true,
-      ),
-    );
+    required String targetHandle,
+  }) async {
+    return 'conversation-id';
   }
 }
 
-class _FakeProfileRepository implements ProfileRepository {
+class _FakeChatRealtime implements ChatRealtime {
   @override
-  Future<DiscoverableUser> discoverByHandle({
-    required String accessToken,
-    required String handle,
-  }) async {
-    return const DiscoverableUser(
-      discoverable: true,
-      profile: DiscoverableProfile(
-        id: 'user-id',
-        nickname: 'Demo User',
-        handle: 'demo_user',
-        avatarUrl: null,
-      ),
-    );
-  }
+  final Stream<ChatRealtimeConnectionState> connectionStateStream =
+      const Stream<ChatRealtimeConnectionState>.empty();
 
   @override
-  Future<UserProfile> fetchCurrent({required String accessToken}) async {
-    return const UserProfile(
-      id: 'user-id',
-      identifier: 'demo_user',
-      nickname: 'Demo User',
-      handle: 'demo_user',
-      avatarUrl: null,
-      discoveryMode: 'public',
-    );
-  }
+  final Stream<ChatConnectionReadyEvent> connectionReadyStream =
+      const Stream<ChatConnectionReadyEvent>.empty();
 
   @override
-  Future<UserProfile> updateCurrent({
-    required String accessToken,
-    required String nickname,
-    required String? avatarUrl,
-    required String discoveryMode,
-  }) async {
-    return UserProfile(
-      id: 'user-id',
-      identifier: 'demo_user',
-      nickname: nickname,
-      handle: 'demo_user',
-      avatarUrl: avatarUrl,
-      discoveryMode: discoveryMode,
-    );
-  }
+  final Stream<String> connectionErrorStream = const Stream<String>.empty();
+
+  @override
+  final Stream<ChatConversationCreatedEvent> conversationCreatedStream =
+      const Stream<ChatConversationCreatedEvent>.empty();
+
+  @override
+  final Stream<ChatMessage> messageCreatedStream =
+      const Stream<ChatMessage>.empty();
+
+  @override
+  final Stream<ChatReadCursorUpdatedEvent> readCursorUpdatedStream =
+      const Stream<ChatReadCursorUpdatedEvent>.empty();
+
+  @override
+  final Stream<ChatSessionRevokedEvent> sessionRevokedStream =
+      const Stream<ChatSessionRevokedEvent>.empty();
+
+  @override
+  final Stream<ChatTypingUpdatedEvent> typingUpdatedStream =
+      const Stream<ChatTypingUpdatedEvent>.empty();
+
+  @override
+  bool get isConnected => false;
+
+  @override
+  void connect({required String accessToken}) {}
+
+  @override
+  void disconnect() {}
+
+  @override
+  void emitTyping({required String conversationId, required bool isTyping}) {}
 }

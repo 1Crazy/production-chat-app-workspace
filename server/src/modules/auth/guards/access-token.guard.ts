@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 
-import { InMemoryAuthRepository } from '../repositories/in-memory-auth.repository';
+import { AuthRepository } from '../repositories/auth.repository';
 import { AuthTokenService } from '../services/auth-token.service';
 import type { AuthenticatedRequest } from '../types/authenticated-request.type';
 
@@ -14,22 +14,22 @@ import type { AuthenticatedRequest } from '../types/authenticated-request.type';
 export class AccessTokenGuard implements CanActivate {
   constructor(
     private readonly authTokenService: AuthTokenService,
-    private readonly authRepository: InMemoryAuthRepository,
+    private readonly authRepository: AuthRepository,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     const token = this.extractBearerToken(request);
     const payload = this.authTokenService.verifyAccessToken(token);
-    const session = this.authRepository.findActiveSessionById(payload.sid);
-    const user = this.authRepository.findActiveUserById(payload.sub);
+    const session = await this.authRepository.findActiveSessionById(payload.sid);
+    const user = await this.authRepository.findActiveUserById(payload.sub);
 
     if (!session || !user || session.userId !== user.id) {
       throw new UnauthorizedException('登录状态已失效');
     }
 
     session.lastSeenAt = new Date();
-    this.authRepository.saveSession(session);
+    await this.authRepository.saveSession(session);
     (request as AuthenticatedRequest).auth = {
       user,
       session,

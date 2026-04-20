@@ -2,14 +2,26 @@ import { Module } from '@nestjs/common';
 
 import { MessagesController } from './controllers/messages.controller';
 import { MessagesService } from './services/messages.service';
+import { MessageIdempotencyStore } from './stores/message-idempotency.store';
+import { RedisMessageIdempotencyStore } from './stores/redis-message-idempotency.store';
 
+import { CacheModule } from '@app/infra/cache/cache.module';
 import { DatabaseModule } from '@app/infra/database/database.module';
 import { AuthModule } from '@app/modules/auth/auth.module';
+import { MediaModule } from '@app/modules/media/media.module';
+import { RealtimeModule } from '@app/modules/realtime/realtime.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule],
+  imports: [CacheModule, DatabaseModule, AuthModule, MediaModule, RealtimeModule],
   controllers: [MessagesController],
-  providers: [MessagesService],
+  providers: [
+    MessagesService,
+    RedisMessageIdempotencyStore,
+    {
+      provide: MessageIdempotencyStore,
+      useExisting: RedisMessageIdempotencyStore,
+    },
+  ],
   exports: [MessagesService],
 })
 export class MessagesModule {}

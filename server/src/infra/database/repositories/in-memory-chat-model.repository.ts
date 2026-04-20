@@ -14,8 +14,10 @@ import type {
 import type { MessageEntity, MessageStatus, MessageType } from '../entities/message.entity';
 import type { ReadCursorEntity } from '../entities/read-cursor.entity';
 
+import { ChatModelRepository } from './chat-model.repository';
+
 @Injectable()
-export class InMemoryChatModelRepository {
+export class InMemoryChatModelRepository extends ChatModelRepository {
   private readonly conversationsById = new Map<string, ConversationEntity>();
   private readonly conversationIdsByDirectKey = new Map<string, string>();
   private readonly membersById = new Map<string, ConversationMemberEntity>();
@@ -25,7 +27,7 @@ export class InMemoryChatModelRepository {
   private readonly messageIdsByClientKey = new Map<string, string>();
   private readonly readCursorsByKey = new Map<string, ReadCursorEntity>();
 
-  getSummary(): ChatModelSummaryDto {
+  override async getSummary(): Promise<ChatModelSummaryDto> {
     return {
       conversations: this.conversationsById.size,
       members: this.membersById.size,
@@ -34,12 +36,12 @@ export class InMemoryChatModelRepository {
     };
   }
 
-  createConversation(params: {
+  override async createConversation(params: {
     type: ConversationType;
     title?: string | null;
     createdBy: string;
     memberIds: string[];
-  }): ConversationEntity {
+  }): Promise<ConversationEntity> {
     const now = new Date();
     const normalizedMemberIds = Array.from(
       new Set([params.createdBy, ...params.memberIds]),
@@ -81,7 +83,9 @@ export class InMemoryChatModelRepository {
     return conversation;
   }
 
-  findDirectConversationByMemberIds(memberIds: string[]): ConversationEntity | null {
+  override async findDirectConversationByMemberIds(
+    memberIds: string[],
+  ): Promise<ConversationEntity | null> {
     const directKey = Array.from(new Set(memberIds)).sort().join(':');
     const conversationId = this.conversationIdsByDirectKey.get(directKey);
 
@@ -92,7 +96,9 @@ export class InMemoryChatModelRepository {
     return this.conversationsById.get(conversationId) ?? null;
   }
 
-  getConversationOrThrow(conversationId: string): ConversationEntity {
+  override async getConversationOrThrow(
+    conversationId: string,
+  ): Promise<ConversationEntity> {
     const conversation = this.conversationsById.get(conversationId);
 
     if (!conversation) {
@@ -102,7 +108,13 @@ export class InMemoryChatModelRepository {
     return conversation;
   }
 
-  listConversationMembers(conversationId: string): ConversationMemberEntity[] {
+  override async listConversations(): Promise<ConversationEntity[]> {
+    return Array.from(this.conversationsById.values());
+  }
+
+  override async listConversationMembers(
+    conversationId: string,
+  ): Promise<ConversationMemberEntity[]> {
     const memberIds = this.memberIdsByConversation.get(conversationId);
 
     if (!memberIds) {
@@ -114,7 +126,25 @@ export class InMemoryChatModelRepository {
       .filter((member): member is ConversationMemberEntity => member != null);
   }
 
-  addMember(params: {
+  override async listConversationIdsForUser(userId: string): Promise<string[]> {
+    const conversationIds = Array.from(this.conversationsById.keys());
+
+    return conversationIds.filter((conversationId) => {
+      return this.listConversationMembersSync(conversationId).some((member) => {
+        return member.userId === userId;
+      });
+    });
+  }
+
+  override async listConversationMemberUserIds(
+    conversationId: string,
+  ): Promise<string[]> {
+    return this.listConversationMembersSync(conversationId).map((member) => {
+      return member.userId;
+    });
+  }
+
+  private addMember(params: {
     conversationId: string;
     userId: string;
     role: ConversationMemberRole;
@@ -134,33 +164,24 @@ export class InMemoryChatModelRepository {
     return member;
   }
 
-  isConversationMember(conversationId: string, userId: string): boolean {
-    return this.listConversationMembers(conversationId).some((member) => {
+  override async isConversationMember(
+    conversationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    return this.listConversationMembersSync(conversationId).some((member) => {
       return member.userId === userId;
     });
   }
 
-  createMessage(params: {
+  override async createMessage(params: {
     conversationId: string;
     senderId: string;
     clientMessageId: string;
     type: MessageType;
     status?: MessageStatus;
     content: Record<string, unknown>;
-  }): MessageEntity {
-    // 幂等键同时绑定发送人和会话，避免不同成员误用同一个 clientMessageId 时互相冲突。
-    const clientKey = this.buildClientMessageKey(
-      params.conversationId,
-      params.senderId,
-      params.clientMessageId,
-    );
-    const existingMessageId = this.messageIdsByClientKey.get(clientKey);
-
-    if (existingMessageId) {
-      return this.getMessageOrThrow(existingMessageId);
-    }
-
-    const conversation = this.getConversationOrThrow(params.conversationId);
+  }): Promise<MessageEntity> {
+    const conversation = this.getConversationOrThrowSync(params.conversationId);
     const nextSequence = conversation.latestSequence + 1;
     const now = new Date();
     const message: MessageEntity = {
@@ -180,7 +201,14 @@ export class InMemoryChatModelRepository {
     conversation.updatedAt = now;
     this.conversationsById.set(conversation.id, conversation);
     this.messagesById.set(message.id, message);
-    this.messageIdsByClientKey.set(clientKey, message.id);
+    this.messageIdsByClientKey.set(
+      this.buildClientMessageKey(
+        params.conversationId,
+        params.senderId,
+        params.clientMessageId,
+      ),
+      message.id,
+    );
 
     const messageIds = this.messageIdsByConversation.get(params.conversationId) ?? [];
     messageIds.push(message.id);
@@ -188,37 +216,54 @@ export class InMemoryChatModelRepository {
     return message;
   }
 
-  listMessages(conversationId: string): MessageEntity[] {
+  override async listMessages(conversationId: string): Promise<MessageEntity[]> {
     const messageIds = this.messageIdsByConversation.get(conversationId) ?? [];
     return messageIds
       .map((messageId) => this.messagesById.get(messageId))
       .filter((message): message is MessageEntity => message != null);
   }
 
-  listMessagesAfterSequence(
+  override async findLatestMessage(
+    conversationId: string,
+  ): Promise<MessageEntity | null> {
+    const messages = await this.listMessages(conversationId);
+    return messages.length > 0 ? messages[messages.length - 1] ?? null : null;
+  }
+
+  override async listMessagesAfterSequence(
     conversationId: string,
     sequence: number,
-  ): MessageEntity[] {
-    return this.listMessages(conversationId).filter((message) => {
+  ): Promise<MessageEntity[]> {
+    return (await this.listMessages(conversationId)).filter((message) => {
       return message.sequence > sequence;
     });
   }
 
-  getMessageOrThrow(messageId: string): MessageEntity {
-    const message = this.messagesById.get(messageId);
-
-    if (!message) {
-      throw new NotFoundException('消息不存在');
-    }
-
-    return message;
+  override async getMessageOrThrow(messageId: string): Promise<MessageEntity> {
+    return this.getMessageOrThrowSync(messageId);
   }
 
-  updateReadCursor(params: {
+  override async findMessageByClientKey(params: {
+    conversationId: string;
+    senderId: string;
+    clientMessageId: string;
+  }): Promise<MessageEntity | null> {
+    const messageId = this.messageIdsByClientKey.get(
+      this.buildClientMessageKey(
+        params.conversationId,
+        params.senderId,
+        params.clientMessageId,
+      ),
+    );
+
+    return messageId ? this.getMessageOrThrowSync(messageId) : null;
+  }
+
+  override async updateReadCursor(params: {
     conversationId: string;
     userId: string;
     lastReadSequence: number;
-  }): ReadCursorEntity {
+  }): Promise<ReadCursorEntity> {
     const key = this.buildReadCursorKey(params.conversationId, params.userId);
     const existingCursor = this.readCursorsByKey.get(key);
     const cursor: ReadCursorEntity = {
@@ -236,19 +281,55 @@ export class InMemoryChatModelRepository {
     return cursor;
   }
 
-  findReadCursor(
+  override async findReadCursor(
     conversationId: string,
     userId: string,
-  ): ReadCursorEntity | null {
+  ): Promise<ReadCursorEntity | null> {
     return this.readCursorsByKey.get(
       this.buildReadCursorKey(conversationId, userId),
     ) ?? null;
   }
 
-  listReadCursorsForConversation(conversationId: string): ReadCursorEntity[] {
+  override async listReadCursorsForConversation(
+    conversationId: string,
+  ): Promise<ReadCursorEntity[]> {
     return Array.from(this.readCursorsByKey.values()).filter((cursor) => {
       return cursor.conversationId === conversationId;
     });
+  }
+
+  private getMessageOrThrowSync(messageId: string): MessageEntity {
+    const message = this.messagesById.get(messageId);
+
+    if (!message) {
+      throw new NotFoundException('消息不存在');
+    }
+
+    return message;
+  }
+
+  private getConversationOrThrowSync(conversationId: string): ConversationEntity {
+    const conversation = this.conversationsById.get(conversationId);
+
+    if (!conversation) {
+      throw new NotFoundException('会话不存在');
+    }
+
+    return conversation;
+  }
+
+  private listConversationMembersSync(
+    conversationId: string,
+  ): ConversationMemberEntity[] {
+    const memberIds = this.memberIdsByConversation.get(conversationId);
+
+    if (!memberIds) {
+      return [];
+    }
+
+    return Array.from(memberIds)
+      .map((memberId) => this.membersById.get(memberId))
+      .filter((member): member is ConversationMemberEntity => member != null);
   }
 
   private buildClientMessageKey(

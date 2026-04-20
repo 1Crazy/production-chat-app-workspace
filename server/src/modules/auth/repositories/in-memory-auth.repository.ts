@@ -6,19 +6,21 @@ import type { AuthUserEntity } from '../entities/auth-user.entity';
 import type { DeviceSessionEntity } from '../entities/device-session.entity';
 import type { VerificationCodeEntity } from '../entities/verification-code.entity';
 
+import { AuthRepository } from './auth.repository';
+
 @Injectable()
-export class InMemoryAuthRepository {
+export class InMemoryAuthRepository extends AuthRepository {
   private readonly usersById = new Map<string, AuthUserEntity>();
   private readonly userIdsByIdentifier = new Map<string, string>();
   private readonly userIdsByHandle = new Map<string, string>();
   private readonly sessionsById = new Map<string, DeviceSessionEntity>();
   private readonly verificationCodes = new Map<string, VerificationCodeEntity>();
 
-  createVerificationCode(
+  override async createVerificationCode(
     identifier: string,
     code: string,
     expiresAt: Date,
-  ): VerificationCodeEntity {
+  ): Promise<VerificationCodeEntity> {
     const entity: VerificationCodeEntity = {
       identifier,
       code,
@@ -31,19 +33,23 @@ export class InMemoryAuthRepository {
     return entity;
   }
 
-  findVerificationCode(identifier: string): VerificationCodeEntity | null {
+  override async findVerificationCode(
+    identifier: string,
+  ): Promise<VerificationCodeEntity | null> {
     return this.verificationCodes.get(identifier) ?? null;
   }
 
-  saveVerificationCode(entity: VerificationCodeEntity): void {
+  override async saveVerificationCode(
+    entity: VerificationCodeEntity,
+  ): Promise<void> {
     this.verificationCodes.set(entity.identifier, entity);
   }
 
-  createUser(params: {
+  override async createUser(params: {
     identifier: string;
     nickname: string;
     handle: string;
-  }): AuthUserEntity {
+  }): Promise<AuthUserEntity> {
     const now = new Date();
     const user: AuthUserEntity = {
       id: randomUUID(),
@@ -63,7 +69,9 @@ export class InMemoryAuthRepository {
     return user;
   }
 
-  findUserByIdentifier(identifier: string): AuthUserEntity | null {
+  override async findUserByIdentifier(
+    identifier: string,
+  ): Promise<AuthUserEntity | null> {
     const userId = this.userIdsByIdentifier.get(identifier);
 
     if (!userId) {
@@ -73,7 +81,9 @@ export class InMemoryAuthRepository {
     return this.usersById.get(userId) ?? null;
   }
 
-  findActiveUserById(userId: string): AuthUserEntity | null {
+  override async findActiveUserById(
+    userId: string,
+  ): Promise<AuthUserEntity | null> {
     const user = this.usersById.get(userId) ?? null;
 
     if (!user || user.disabledAt) {
@@ -83,7 +93,9 @@ export class InMemoryAuthRepository {
     return user;
   }
 
-  findUserByHandle(handle: string): AuthUserEntity | null {
+  override async findUserByHandle(
+    handle: string,
+  ): Promise<AuthUserEntity | null> {
     const userId = this.userIdsByHandle.get(handle);
 
     if (!userId) {
@@ -93,8 +105,10 @@ export class InMemoryAuthRepository {
     return this.usersById.get(userId) ?? null;
   }
 
-  findActiveUserByHandle(handle: string): AuthUserEntity | null {
-    const user = this.findUserByHandle(handle);
+  override async findActiveUserByHandle(
+    handle: string,
+  ): Promise<AuthUserEntity | null> {
+    const user = await this.findUserByHandle(handle);
 
     if (!user || user.disabledAt) {
       return null;
@@ -103,17 +117,17 @@ export class InMemoryAuthRepository {
     return user;
   }
 
-  saveUser(user: AuthUserEntity): void {
+  override async saveUser(user: AuthUserEntity): Promise<void> {
     this.usersById.set(user.id, user);
     this.userIdsByIdentifier.set(user.identifier, user.id);
     this.userIdsByHandle.set(user.handle, user.id);
   }
 
-  createSession(params: {
+  override async createSession(params: {
     userId: string;
     deviceName: string;
     refreshNonce: string;
-  }): DeviceSessionEntity {
+  }): Promise<DeviceSessionEntity> {
     const now = new Date();
     const session: DeviceSessionEntity = {
       id: randomUUID(),
@@ -129,11 +143,13 @@ export class InMemoryAuthRepository {
     return session;
   }
 
-  saveSession(session: DeviceSessionEntity): void {
+  override async saveSession(session: DeviceSessionEntity): Promise<void> {
     this.sessionsById.set(session.id, session);
   }
 
-  findActiveSessionById(sessionId: string): DeviceSessionEntity | null {
+  override async findActiveSessionById(
+    sessionId: string,
+  ): Promise<DeviceSessionEntity | null> {
     const session = this.sessionsById.get(sessionId) ?? null;
 
     if (!session || session.revokedAt) {
@@ -143,7 +159,9 @@ export class InMemoryAuthRepository {
     return session;
   }
 
-  listActiveSessionsByUserId(userId: string): DeviceSessionEntity[] {
+  override async listActiveSessionsByUserId(
+    userId: string,
+  ): Promise<DeviceSessionEntity[]> {
     return Array.from(this.sessionsById.values())
       .filter((session) => session.userId === userId && !session.revokedAt)
       .sort((left, right) => {
@@ -151,7 +169,9 @@ export class InMemoryAuthRepository {
       });
   }
 
-  revokeSession(sessionId: string): DeviceSessionEntity | null {
+  override async revokeSession(
+    sessionId: string,
+  ): Promise<DeviceSessionEntity | null> {
     const session = this.sessionsById.get(sessionId) ?? null;
 
     if (!session || session.revokedAt) {

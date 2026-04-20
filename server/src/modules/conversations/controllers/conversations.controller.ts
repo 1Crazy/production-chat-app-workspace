@@ -10,6 +10,7 @@ import {
 
 import { CreateDirectConversationDto } from '../dto/create-direct-conversation.dto';
 import { CreateGroupConversationDto } from '../dto/create-group-conversation.dto';
+import { UpdateReadCursorDto } from '../dto/update-read-cursor.dto';
 import { ConversationsService } from '../services/conversations.service';
 
 import { AccessTokenGuard } from '@app/modules/auth/guards/access-token.guard';
@@ -27,6 +28,14 @@ export class ConversationsController {
   @Get('model-summary')
   getModelSummary() {
     return this.conversationsService.getModelSummary();
+  }
+
+  @UseGuards(AccessTokenGuard)
+  @Get()
+  listRecentConversations(@Req() request: AuthenticatedRequest) {
+    return this.conversationsService.listRecentConversations(
+      request.auth.user.id,
+    );
   }
 
   @UseGuards(AccessTokenGuard)
@@ -62,6 +71,20 @@ export class ConversationsController {
     return this.conversationsService.getConversationViewOrThrow(
       conversationId,
       request.auth.user.id,
+    );
+  }
+
+  @UseGuards(AccessTokenGuard)
+  @Post(':conversationId/read-cursor')
+  updateReadCursor(
+    @Req() request: AuthenticatedRequest,
+    @Param('conversationId') conversationId: string,
+    @Body() dto: UpdateReadCursorDto,
+  ) {
+    return this.conversationsService.updateReadCursor(
+      request.auth.user.id,
+      conversationId,
+      dto,
     );
   }
 }

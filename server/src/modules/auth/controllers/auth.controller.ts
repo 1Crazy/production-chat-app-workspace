@@ -28,11 +28,11 @@ export class AuthController {
 
   // 首期先提供开发验证码接口，后续可以替换成短信或邮件服务。
   @Post('request-code')
-  requestCode(@Body() dto: RequestAuthCodeDto): {
+  requestCode(@Body() dto: RequestAuthCodeDto): Promise<{
     identifier: string;
     debugCode: string;
     expiresInSeconds: number;
-  } {
+  }> {
     return this.authService.requestCode(dto);
   }
 
