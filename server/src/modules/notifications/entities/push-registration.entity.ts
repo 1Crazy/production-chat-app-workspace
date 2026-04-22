@@ -8,6 +8,7 @@ export interface PushRegistrationEntity {
   provider: PushProvider;
   token: string;
   pushEnvironment: PushEnvironment;
+  privacyModeEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   lastRegisteredAt: Date;

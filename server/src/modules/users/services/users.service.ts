@@ -7,12 +7,14 @@ import {
   toUserProfileDto,
 } from '../dto/user-profile.dto';
 
+import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly authIdentityService: AuthIdentityService,
+    private readonly rateLimitService: RateLimitService,
   ) {}
 
   getHealth(): { module: string; status: string } {
@@ -43,6 +45,16 @@ export class UsersService {
     requesterUserId: string,
     handle: string,
   ): Promise<DiscoverableUserDto> {
+    await this.rateLimitService.consumeOrThrow({
+      scope: 'users.discovery',
+      actorKey: requesterUserId,
+      limit: 30,
+      windowMs: 60 * 1000,
+      message: '搜索过于频繁，请稍后再试',
+      metadata: {
+        handle: handle.trim().toLowerCase(),
+      },
+    });
     const user = await this.authIdentityService.findDiscoverableUserByHandle(
       handle.trim(),
     );

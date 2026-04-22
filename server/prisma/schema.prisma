@@ -24,6 +24,8 @@ model User {
   mediaUploads   MediaAttachment[]
   pushRegistrations PushRegistration[]
   readCursors    ReadCursor[]
+  reportsFiled   ModerationReport[] @relation("ModerationReportReporter")
+  adminAuditLogs AdminAuditLog[] @relation("AdminAuditLogActor")
 
   @@map("users")
 }
@@ -154,6 +156,7 @@ model PushRegistration {
   provider         String
   token            String
   pushEnvironment  String        @map("push_environment")
+  privacyModeEnabled Boolean     @default(false) @map("privacy_mode_enabled")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
   lastRegisteredAt DateTime      @default(now()) @map("last_registered_at")
@@ -165,4 +168,46 @@ model PushRegistration {
   @@index([sessionId, provider, revokedAt])
   @@index([userId, revokedAt, updatedAt])
   @@map("push_registrations")
+}
+
+model ModerationReport {
+  id               String   @id @default(uuid())
+  reporterId       String   @map("reporter_id")
+  targetType       String   @map("target_type")
+  targetId         String   @map("target_id")
+  conversationId   String?  @map("conversation_id")
+  messageId        String?  @map("message_id")
+  reportedUserId   String?  @map("reported_user_id")
+  reasonCode       String   @map("reason_code")
+  description      String?  @map("description")
+  status           String   @default("pending_review")
+  resolutionNote   String?  @map("resolution_note")
+  handledByUserId  String?  @map("handled_by_user_id")
+  handledAt        DateTime? @map("handled_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  reporter         User     @relation("ModerationReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([reporterId, createdAt])
+  @@index([targetType, targetId, status])
+  @@index([status, createdAt])
+  @@map("moderation_reports")
+}
+
+model AdminAuditLog {
+  id             String    @id @default(uuid())
+  actorUserId    String?   @map("actor_user_id")
+  action         String
+  targetType     String    @map("target_type")
+  targetId       String    @map("target_id")
+  result         String
+  summary        String    @map("summary")
+  metadata       Json?     @map("metadata")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  actor          User?     @relation("AdminAuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@map("admin_audit_logs")
 }

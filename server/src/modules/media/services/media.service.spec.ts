@@ -7,6 +7,7 @@ import { MediaObjectStorageService } from './media-object-storage.service';
 import type { MediaProcessingWorkerService } from './media-processing-worker.service';
 import { MediaService } from './media.service';
 
+import type { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { InMemoryChatModelRepository } from '@app/infra/database/repositories/in-memory-chat-model.repository';
 
 class FakeMediaObjectStorageService extends MediaObjectStorageService {
@@ -151,11 +152,15 @@ describe('MediaService', () => {
     const chatModelRepository = new InMemoryChatModelRepository();
     const mediaAttachmentRepository = new InMemoryMediaAttachmentRepository();
     const mediaProcessingWorkerService = new FakeMediaProcessingWorkerService();
+    const rateLimitService = {
+      consumeOrThrow: jest.fn().mockResolvedValue(undefined),
+    } as unknown as RateLimitService;
     const service = new MediaService(
       new FakeMediaObjectStorageService(),
       mediaAttachmentRepository,
       mediaProcessingWorkerService as unknown as MediaProcessingWorkerService,
       chatModelRepository,
+      rateLimitService,
     );
     const conversation = await chatModelRepository.createConversation({
       type: 'direct',
@@ -168,6 +173,7 @@ describe('MediaService', () => {
       conversation,
       mediaAttachmentRepository,
       mediaProcessingWorkerService,
+      rateLimitService,
       service,
     };
   }
@@ -314,5 +320,26 @@ describe('MediaService', () => {
     await expect(
       fixture.service.getAttachmentAccess('user-2', token.attachmentId),
     ).rejects.toThrow('附件仍在处理中');
+  });
+
+  it('should reject upload token requests when the limiter trips', async () => {
+    const fixture = await createFixture();
+    (
+      fixture.rateLimitService as unknown as {
+        consumeOrThrow: jest.Mock;
+      }
+    ).consumeOrThrow.mockRejectedValueOnce(
+      new Error('上传请求过于频繁，请稍后再试'),
+    );
+
+    await expect(
+      fixture.service.requestUploadToken('user-1', {
+        purpose: 'chat-message',
+        conversationId: fixture.conversation.id,
+        fileName: 'photo.png',
+        mimeType: 'image/png',
+        sizeBytes: 1024,
+      }),
+    ).rejects.toThrow('上传请求过于频繁，请稍后再试');
   });
 });

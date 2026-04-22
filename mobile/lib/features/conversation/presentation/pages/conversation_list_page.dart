@@ -14,6 +14,7 @@ class ConversationListPage extends StatefulWidget {
     required this.onConversationSelected,
     required this.isVisible,
     required this.reloadToken,
+    this.onItemsChanged,
     this.selectedConversationId,
   });
 
@@ -22,6 +23,7 @@ class ConversationListPage extends StatefulWidget {
   final ChatRealtime chatRealtime;
   final String currentUserId;
   final ValueChanged<ConversationSummary> onConversationSelected;
+  final ValueChanged<List<ConversationSummary>>? onItemsChanged;
   final String? selectedConversationId;
   final bool isVisible;
   final int reloadToken;
@@ -42,6 +44,7 @@ class _ConversationListPageState extends State<ConversationListPage> {
       accessToken: widget.accessToken,
       currentUserId: widget.currentUserId,
       activeConversationId: widget.selectedConversationId,
+      onItemsChanged: widget.onItemsChanged,
     );
     _controller.load();
   }
@@ -60,6 +63,7 @@ class _ConversationListPageState extends State<ConversationListPage> {
         accessToken: widget.accessToken,
         currentUserId: widget.currentUserId,
         activeConversationId: widget.selectedConversationId,
+        onItemsChanged: widget.onItemsChanged,
       );
       _controller.load();
       return;

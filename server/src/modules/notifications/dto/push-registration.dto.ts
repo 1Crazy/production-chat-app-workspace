@@ -4,6 +4,7 @@ export interface PushRegistrationView {
   id: string;
   provider: PushRegistrationEntity['provider'];
   pushEnvironment: PushRegistrationEntity['pushEnvironment'];
+  privacyModeEnabled: boolean;
   createdAt: string;
   updatedAt: string;
   lastRegisteredAt: string;
@@ -18,6 +19,7 @@ export function toPushRegistrationView(
     id: registration.id,
     provider: registration.provider,
     pushEnvironment: registration.pushEnvironment,
+    privacyModeEnabled: registration.privacyModeEnabled,
     createdAt: registration.createdAt.toISOString(),
     updatedAt: registration.updatedAt.toISOString(),
     lastRegisteredAt: registration.lastRegisteredAt.toISOString(),

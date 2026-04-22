@@ -23,6 +23,7 @@ import { MediaAttachmentRepository } from '../repositories/media-attachment.repo
 import { MediaObjectStorageService } from './media-object-storage.service';
 import { MediaProcessingWorkerService } from './media-processing-worker.service';
 
+import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
 
 type MediaFilePolicy = {
@@ -85,6 +86,7 @@ export class MediaService {
     private readonly mediaAttachmentRepository: MediaAttachmentRepository,
     private readonly mediaProcessingWorkerService: MediaProcessingWorkerService,
     private readonly chatModelRepository: ChatModelRepository,
+    private readonly rateLimitService: RateLimitService,
   ) {}
 
   getHealth(): { module: string; status: string } {
@@ -98,6 +100,17 @@ export class MediaService {
     requesterUserId: string,
     dto: RequestUploadTokenDto,
   ): Promise<UploadTokenDto> {
+    await this.rateLimitService.consumeOrThrow({
+      scope: 'media.request-upload-token',
+      actorKey: requesterUserId,
+      limit: 20,
+      windowMs: 10 * 60 * 1000,
+      message: '上传请求过于频繁，请稍后再试',
+      metadata: {
+        conversationId: dto.conversationId,
+        sizeBytes: dto.sizeBytes,
+      },
+    });
     await this.assertConversationMembership(
       dto.conversationId,
       requesterUserId,

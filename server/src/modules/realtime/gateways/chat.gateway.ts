@@ -202,6 +202,12 @@ export class ChatGateway
       readCursor,
     };
 
+    // 当前账号的其他设备也需要同步自己的已读游标和未读角标，
+    // 因此除了会话其他成员，还要发给当前用户的 user room。
+    this.server
+      .to(buildUserRoom(readCursor.userId))
+      .emit(REALTIME_EVENTS.readCursorUpdated, payload);
+
     await this.emitToConversationMembers({
       conversationId: readCursor.conversationId,
       eventName: REALTIME_EVENTS.readCursorUpdated,

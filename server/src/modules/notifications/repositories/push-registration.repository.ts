@@ -12,6 +12,7 @@ export abstract class PushRegistrationRepository {
     provider: PushRegistrationEntity['provider'];
     token: string;
     pushEnvironment: PushRegistrationEntity['pushEnvironment'];
+    privacyModeEnabled: boolean;
   }): Promise<PushRegistrationEntity>;
 
   abstract saveRegistration(entity: PushRegistrationEntity): Promise<void>;

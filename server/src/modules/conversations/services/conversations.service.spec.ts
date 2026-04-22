@@ -1,5 +1,6 @@
 import { ConversationsService } from './conversations.service';
 
+import type { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { InMemoryChatModelRepository } from '@app/infra/database/repositories/in-memory-chat-model.repository';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
@@ -10,6 +11,9 @@ describe('ConversationsService', () => {
     const authRepository = new InMemoryAuthRepository();
     const chatModelRepository = new InMemoryChatModelRepository();
     const authIdentityService = new AuthIdentityService(authRepository);
+    const rateLimitService = {
+      consumeOrThrow: jest.fn().mockResolvedValue(undefined),
+    } as unknown as RateLimitService;
     const chatGateway = {
       emitConversationCreated: jest.fn(),
       emitReadCursorUpdated: jest.fn().mockResolvedValue(undefined),
@@ -17,6 +21,7 @@ describe('ConversationsService', () => {
     const service = new ConversationsService(
       chatModelRepository,
       authIdentityService,
+      rateLimitService,
       chatGateway,
     );
 
@@ -24,6 +29,7 @@ describe('ConversationsService', () => {
       authRepository,
       chatGateway,
       chatModelRepository,
+      rateLimitService,
       service,
     };
   }
@@ -134,5 +140,38 @@ describe('ConversationsService', () => {
         lastReadSequence: 2,
       }),
     );
+  });
+
+  it('should reject high-frequency group creation attempts', async () => {
+    const fixture = createFixture();
+    const alice = await fixture.authRepository.createUser({
+      identifier: 'alice@example.com',
+      nickname: 'Alice',
+      handle: 'alice_user',
+    });
+    await fixture.authRepository.createUser({
+      identifier: 'bob@example.com',
+      nickname: 'Bob',
+      handle: 'bob_user',
+    });
+    await fixture.authRepository.createUser({
+      identifier: 'carol@example.com',
+      nickname: 'Carol',
+      handle: 'carol_user',
+    });
+    (
+      fixture.rateLimitService as unknown as {
+        consumeOrThrow: jest.Mock;
+      }
+    ).consumeOrThrow.mockRejectedValueOnce(
+      new Error('建群操作过于频繁，请稍后再试'),
+    );
+
+    await expect(
+      fixture.service.createGroupConversation(alice.id, {
+        title: '新群',
+        memberHandles: ['bob_user', 'carol_user'],
+      }),
+    ).rejects.toThrow('建群操作过于频繁，请稍后再试');
   });
 });

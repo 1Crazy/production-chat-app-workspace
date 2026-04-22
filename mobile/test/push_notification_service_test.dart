@@ -17,6 +17,8 @@ void main() {
     expect(intent.body, '你好');
     expect(intent.conversationId, 'conversation-123');
     expect(intent.hasConversationTarget, isTrue);
+    expect(intent.badgeCount, isNull);
+    expect(intent.latestSequence, isNull);
   });
 
   test('push intent falls back to compatible data keys', () {
@@ -65,5 +67,21 @@ void main() {
 
     expect(intent.conversationId, 'conversation-999');
     expect(intent.hasConversationTarget, isTrue);
+  });
+
+  test('push intent parses badge count and latest sequence from sync payload', () {
+    final intent = PushNotificationIntent.fromRemoteMessage(
+      const RemoteMessage(
+        messageId: 'message-2',
+        data: {
+          'conversationId': 'conversation-123',
+          'badgeCount': '7',
+          'sequence': '42',
+        },
+      ),
+    );
+
+    expect(intent.badgeCount, 7);
+    expect(intent.latestSequence, 42);
   });
 }

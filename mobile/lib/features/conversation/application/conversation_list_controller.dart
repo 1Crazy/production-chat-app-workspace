@@ -14,11 +14,13 @@ class ConversationListController extends ChangeNotifier {
     required String accessToken,
     required String currentUserId,
     String? activeConversationId,
+    ValueChanged<List<ConversationSummary>>? onItemsChanged,
   }) : _conversationRepository = conversationRepository,
        _chatRealtime = chatRealtime,
        _accessToken = accessToken,
        _currentUserId = currentUserId,
-       _activeConversationId = activeConversationId {
+       _activeConversationId = activeConversationId,
+       _onItemsChanged = onItemsChanged {
     _subscriptions = [
       _chatRealtime.connectionReadyStream.listen((_) {
         load(silent: true);
@@ -38,6 +40,7 @@ class ConversationListController extends ChangeNotifier {
   final ConversationRepository _conversationRepository;
   final ChatRealtime _chatRealtime;
   final String _currentUserId;
+  final ValueChanged<List<ConversationSummary>>? _onItemsChanged;
   String _accessToken;
   String? _activeConversationId;
   late final List<StreamSubscription<dynamic>> _subscriptions;
@@ -61,6 +64,7 @@ class ConversationListController extends ChangeNotifier {
       _items = await _conversationRepository.fetchRecent(
         accessToken: _accessToken,
       );
+      _publishItemsChanged();
     } catch (error) {
       _errorMessage = error.toString();
     } finally {
@@ -118,6 +122,7 @@ class ConversationListController extends ChangeNotifier {
     final nextItems = [..._items]..removeAt(targetIndex);
     nextItems.insert(0, updatedItem);
     _items = nextItems;
+    _publishItemsChanged();
     notifyListeners();
   }
 
@@ -140,11 +145,16 @@ class ConversationListController extends ChangeNotifier {
       unreadCount: event.unreadCount,
     );
     _items = nextItems;
+    _publishItemsChanged();
     notifyListeners();
   }
 
   String _buildMessagePreview(ChatMessage message) {
     final preview = message.previewText.trim();
     return preview.isEmpty ? '[消息]' : preview;
+  }
+
+  void _publishItemsChanged() {
+    _onItemsChanged?.call(List.unmodifiable(_items));
   }
 }

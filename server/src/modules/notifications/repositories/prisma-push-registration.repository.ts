@@ -37,6 +37,7 @@ export class PrismaPushRegistrationRepository
     provider: PushRegistrationEntity['provider'];
     token: string;
     pushEnvironment: PushRegistrationEntity['pushEnvironment'];
+    privacyModeEnabled: boolean;
   }): Promise<PushRegistrationEntity> {
     const registration = await this.prismaService.pushRegistration.create({
       data: {
@@ -45,6 +46,7 @@ export class PrismaPushRegistrationRepository
         provider: params.provider,
         token: params.token,
         pushEnvironment: params.pushEnvironment,
+        privacyModeEnabled: params.privacyModeEnabled,
       },
     });
 
@@ -64,6 +66,7 @@ export class PrismaPushRegistrationRepository
         provider: entity.provider,
         token: entity.token,
         pushEnvironment: entity.pushEnvironment,
+        privacyModeEnabled: entity.privacyModeEnabled,
         lastRegisteredAt: entity.lastRegisteredAt,
         revokedAt: entity.revokedAt,
       },
@@ -115,6 +118,7 @@ export class PrismaPushRegistrationRepository
       token: registration.token,
       pushEnvironment:
         registration.pushEnvironment as PushRegistrationEntity['pushEnvironment'],
+      privacyModeEnabled: registration.privacyModeEnabled,
       createdAt: registration.createdAt,
       updatedAt: registration.updatedAt,
       lastRegisteredAt: registration.lastRegisteredAt,

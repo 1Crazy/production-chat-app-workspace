@@ -1,5 +1,4 @@
-# Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -27,8 +26,27 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 
 flutter_ios_podfile_setup
 
+firebase_ios_sdk_local_path = ENV['FIREBASE_IOS_SDK_LOCAL_PATH']
+firebase_ios_sdk_version = ENV['FIREBASE_IOS_SDK_VERSION']
+
+if firebase_ios_sdk_version && !firebase_ios_sdk_version.empty?
+  $FirebaseSDKVersion = firebase_ios_sdk_version
+end
+
 target 'Runner' do
   use_frameworks!
+
+  # When GitHub / CocoaPods networking is flaky, allow the build to reuse a
+  # locally cloned firebase-ios-sdk checkout instead of forcing pod install to
+  # git clone the Firebase podspec source again.
+  if firebase_ios_sdk_local_path && File.directory?(firebase_ios_sdk_local_path)
+    pod 'Firebase/CoreOnly', :path => firebase_ios_sdk_local_path
+    pod 'Firebase/Messaging', :path => firebase_ios_sdk_local_path
+    pod 'FirebaseCore', :path => firebase_ios_sdk_local_path
+    pod 'FirebaseCoreInternal', :path => firebase_ios_sdk_local_path
+    pod 'FirebaseInstallations', :path => firebase_ios_sdk_local_path
+    pod 'FirebaseMessaging', :path => firebase_ios_sdk_local_path
+  end
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
@@ -39,5 +57,9 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    end
   end
 end

@@ -1,4 +1,11 @@
-import { IsIn, IsString, Length, Matches } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+} from 'class-validator';
 
 export class RegisterPushTokenDto {
   @IsIn(['apns', 'fcm'])
@@ -11,4 +18,8 @@ export class RegisterPushTokenDto {
 
   @IsIn(['sandbox', 'production'])
   pushEnvironment!: 'sandbox' | 'production';
+
+  @IsOptional()
+  @IsBoolean()
+  privacyModeEnabled?: boolean;
 }

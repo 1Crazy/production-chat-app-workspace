@@ -8,6 +8,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 
 import { LoginDto } from '../dto/login.dto';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
@@ -16,6 +17,8 @@ import { RequestAuthCodeDto } from '../dto/request-auth-code.dto';
 import { AccessTokenGuard } from '../guards/access-token.guard';
 import { AuthService } from '../services/auth.service';
 import type { AuthenticatedRequest } from '../types/authenticated-request.type';
+
+import { extractRequestSourceKey } from '@app/infra/abuse/utils/request-source.util';
 
 @Controller('auth')
 export class AuthController {
@@ -28,22 +31,22 @@ export class AuthController {
 
   // 首期先提供开发验证码接口，后续可以替换成短信或邮件服务。
   @Post('request-code')
-  requestCode(@Body() dto: RequestAuthCodeDto): Promise<{
+  requestCode(@Req() request: Request, @Body() dto: RequestAuthCodeDto): Promise<{
     identifier: string;
     debugCode: string;
     expiresInSeconds: number;
   }> {
-    return this.authService.requestCode(dto);
+    return this.authService.requestCode(dto, extractRequestSourceKey(request));
   }
 
   @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  register(@Req() request: Request, @Body() dto: RegisterDto) {
+    return this.authService.register(dto, extractRequestSourceKey(request));
   }
 
   @Post('login')
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  login(@Req() request: Request, @Body() dto: LoginDto) {
+    return this.authService.login(dto, extractRequestSourceKey(request));
   }
 
   @Post('refresh')

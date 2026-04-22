@@ -20,6 +20,7 @@ import type { CreateGroupConversationDto } from '../dto/create-group-conversatio
 import { toReadCursorView, type ReadCursorView } from '../dto/read-cursor.dto';
 import type { UpdateReadCursorDto } from '../dto/update-read-cursor.dto';
 
+import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import type { MessageEntity } from '@app/infra/database/entities/message.entity';
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
@@ -29,10 +30,12 @@ import { toUserDiscoveryProfileDto } from '@app/modules/users/dto/user-profile.d
 @Injectable()
 export class ConversationsService {
   private readonly maxGroupMembers = 200;
+  private readonly createGroupWindowMs = 60 * 60 * 1000;
 
   constructor(
     private readonly chatModelRepository: ChatModelRepository,
     private readonly authIdentityService: AuthIdentityService,
+    private readonly rateLimitService: RateLimitService,
     private readonly chatGateway: ChatGateway,
   ) {}
 
@@ -117,6 +120,16 @@ export class ConversationsService {
     requesterUserId: string,
     dto: CreateGroupConversationDto,
   ): Promise<UpsertConversationDto> {
+    await this.rateLimitService.consumeOrThrow({
+      scope: 'conversations.create-group',
+      actorKey: requesterUserId,
+      limit: 5,
+      windowMs: this.createGroupWindowMs,
+      message: '建群操作过于频繁，请稍后再试',
+      metadata: {
+        memberCount: dto.memberHandles.length,
+      },
+    });
     const memberHandles = Array.from(
       new Set(dto.memberHandles.map((handle) => handle.trim())),
     );

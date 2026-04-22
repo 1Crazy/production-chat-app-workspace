@@ -14,6 +14,7 @@ import type { SendMessageDto } from '../dto/send-message.dto';
 import type { SyncMessagesQueryDto } from '../dto/sync-messages-query.dto';
 import { MessageIdempotencyStore } from '../stores/message-idempotency.store';
 
+import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import type { ConversationEntity } from '@app/infra/database/entities/conversation.entity';
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
@@ -22,6 +23,7 @@ import {
   type ReadCursorView,
 } from '@app/modules/conversations/dto/read-cursor.dto';
 import { MediaAttachmentRepository } from '@app/modules/media/repositories/media-attachment.repository';
+import { NotificationsService } from '@app/modules/notifications/services/notifications.service';
 import { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 import {
   toUserDiscoveryProfileDto,
@@ -32,12 +34,15 @@ import {
 export class MessagesService {
   private readonly defaultHistoryPageSize = 20;
   private readonly defaultSyncPageSize = 100;
+  private readonly sendMessageWindowMs = 60 * 1000;
 
   constructor(
     private readonly chatModelRepository: ChatModelRepository,
     private readonly messageIdempotencyStore: MessageIdempotencyStore,
     private readonly authIdentityService: AuthIdentityService,
     private readonly mediaAttachmentRepository: MediaAttachmentRepository,
+    private readonly rateLimitService: RateLimitService,
+    private readonly notificationsService: NotificationsService,
     private readonly chatGateway: ChatGateway,
   ) {}
 
@@ -66,6 +71,16 @@ export class MessagesService {
     senderUserId: string,
     dto: SendMessageDto,
   ): Promise<SendMessageResponseDto> {
+    await this.rateLimitService.consumeOrThrow({
+      scope: 'messages.send',
+      actorKey: senderUserId,
+      limit: 60,
+      windowMs: this.sendMessageWindowMs,
+      message: '消息发送过于频繁，请稍后再试',
+      metadata: {
+        conversationId: dto.conversationId,
+      },
+    });
     await this.authIdentityService.getActiveUserById(senderUserId);
     await this.getAccessibleConversationOrThrow(dto.conversationId, senderUserId);
 
@@ -121,6 +136,11 @@ export class MessagesService {
 
       // REST ack 负责当前发送端确认，实时事件负责把同一条消息扩散到在线成员和发送端其他设备。
       this.chatGateway.emitMessageCreated(messageView);
+      await this.notificationsService.dispatchOfflineMessagePush({
+        conversationId: dto.conversationId,
+        senderUserId,
+        messageId: message.id,
+      });
 
       return {
         ack: 'accepted',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:production_chat_app/app/dependencies/app_dependencies_scope.dart';
 import 'package:production_chat_app/features/auth/application/auth_scope.dart';
 import 'package:production_chat_app/features/profile/application/profile_controller.dart';
+import 'package:production_chat_app/shared/notifications/push_registration_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -12,10 +13,12 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   ProfileController? _profileController;
+  PushRegistrationService? _pushRegistrationService;
   late final TextEditingController _nicknameController;
   late final TextEditingController _avatarUrlController;
   late final TextEditingController _searchHandleController;
   String _discoveryMode = 'public';
+  bool _privacyModeEnabled = false;
   bool _didBootstrap = false;
 
   @override
@@ -35,12 +38,14 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     final dependencies = AppDependenciesScope.of(context);
+    _pushRegistrationService ??= dependencies.pushRegistrationService;
     _profileController = ProfileController(
       profileRepository: dependencies.profileRepository,
     )..addListener(_syncFormFields);
 
     if (!_didBootstrap) {
       _didBootstrap = true;
+      _loadPushPrivacyMode();
       _loadCurrentProfile();
     }
   }
@@ -193,6 +198,25 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
             const SizedBox(height: 24),
+            Text('通知设置', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              value: _privacyModeEnabled,
+              title: const Text('通知隐私模式'),
+              subtitle: const Text('开启后推送只显示通用提醒，不展示消息正文预览。'),
+              onChanged: (value) async {
+                setState(() {
+                  _privacyModeEnabled = value;
+                });
+
+                final accessToken = authController.authSession?.accessToken;
+                await _pushRegistrationService?.updatePrivacyMode(
+                  enabled: value,
+                  accessToken: accessToken,
+                );
+              },
+            ),
+            const SizedBox(height: 24),
             Text('设备会话管理', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
             Wrap(
@@ -290,6 +314,25 @@ class _ProfilePageState extends State<ProfilePage> {
       accessToken: authSession.accessToken,
       handle: _searchHandleController.text.trim(),
     );
+  }
+
+  Future<void> _loadPushPrivacyMode() async {
+    final pushRegistrationService = _pushRegistrationService;
+
+    if (pushRegistrationService == null) {
+      return;
+    }
+
+    final privacyModeEnabled =
+        await pushRegistrationService.loadPrivacyModeEnabled();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _privacyModeEnabled = privacyModeEnabled;
+    });
   }
 
   void _syncFormFields() {

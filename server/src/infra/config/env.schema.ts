@@ -10,6 +10,14 @@ export interface AppEnvironment {
   readonly s3Bucket: string;
   readonly s3AccessKey: string;
   readonly s3SecretKey: string;
+  readonly fcmProjectId?: string;
+  readonly fcmClientEmail?: string;
+  readonly fcmPrivateKey?: string;
+  readonly apnsTeamId?: string;
+  readonly apnsKeyId?: string;
+  readonly apnsBundleId?: string;
+  readonly apnsPrivateKey?: string;
+  readonly adminHandles?: string;
 }
 
 const requiredKeys = [
@@ -47,5 +55,22 @@ export function validateEnv(
     s3Bucket: String(rawConfig.S3_BUCKET),
     s3AccessKey: String(rawConfig.S3_ACCESS_KEY),
     s3SecretKey: String(rawConfig.S3_SECRET_KEY),
+    fcmProjectId: readOptionalString(rawConfig.FCM_PROJECT_ID),
+    fcmClientEmail: readOptionalString(rawConfig.FCM_CLIENT_EMAIL),
+    fcmPrivateKey: readOptionalString(rawConfig.FCM_PRIVATE_KEY),
+    apnsTeamId: readOptionalString(rawConfig.APNS_TEAM_ID),
+    apnsKeyId: readOptionalString(rawConfig.APNS_KEY_ID),
+    apnsBundleId: readOptionalString(rawConfig.APNS_BUNDLE_ID),
+    apnsPrivateKey: readOptionalString(rawConfig.APNS_PRIVATE_KEY),
+    adminHandles: readOptionalString(rawConfig.ADMIN_HANDLES),
   };
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
 }

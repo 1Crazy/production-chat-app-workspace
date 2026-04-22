@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -25,6 +26,8 @@ class PushNotificationIntent {
     required this.title,
     required this.body,
     required this.conversationId,
+    required this.badgeCount,
+    required this.latestSequence,
   });
 
   factory PushNotificationIntent.fromRemoteMessage(RemoteMessage message) {
@@ -43,6 +46,8 @@ class PushNotificationIntent {
             'preview',
           ]),
       conversationId: _extractConversationId(data),
+      badgeCount: _parseInt(data['badgeCount']),
+      latestSequence: _parseInt(data['sequence']),
     );
   }
 
@@ -58,6 +63,8 @@ class PushNotificationIntent {
       title: decoded['title'] as String?,
       body: decoded['body'] as String?,
       conversationId: decoded['conversationId'] as String?,
+      badgeCount: decoded['badgeCount'] as int?,
+      latestSequence: decoded['latestSequence'] as int?,
     );
   }
 
@@ -65,6 +72,8 @@ class PushNotificationIntent {
   final String? title;
   final String? body;
   final String? conversationId;
+  final int? badgeCount;
+  final int? latestSequence;
 
   bool get hasConversationTarget {
     return conversationId != null && conversationId!.isNotEmpty;
@@ -76,6 +85,8 @@ class PushNotificationIntent {
       'title': title,
       'body': body,
       'conversationId': conversationId,
+      'badgeCount': badgeCount,
+      'latestSequence': latestSequence,
     });
   }
 }
@@ -113,6 +124,12 @@ class FirebasePushNotificationService implements PushNotificationService {
         description: 'Foreground chat message alerts',
         importance: Importance.high,
       );
+  static const MethodChannel _iosNotificationMethodChannel = MethodChannel(
+    'production_chat_app/notifications_ios',
+  );
+  static const EventChannel _iosNotificationEventsChannel = EventChannel(
+    'production_chat_app/notifications_ios_events',
+  );
 
   final FirebaseMessaging _messaging;
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
@@ -125,6 +142,7 @@ class FirebasePushNotificationService implements PushNotificationService {
 
   StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
   StreamSubscription<RemoteMessage>? _notificationTapSubscription;
+  StreamSubscription<dynamic>? _iosNotificationEventSubscription;
   PushNotificationIntent? _initialNotificationIntent;
   bool _isInitialized = false;
 
@@ -146,20 +164,18 @@ class FirebasePushNotificationService implements PushNotificationService {
 
     _isInitialized = true;
 
+    await _initializeLocalNotifications();
+
+    if (Platform.isIOS) {
+      await _initializeIosNativeNotifications();
+      return;
+    }
+
     if (!_supportsFirebaseMessagingPlatform || Firebase.apps.isEmpty) {
       return;
     }
 
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    await _initializeLocalNotifications();
-
-    if (Platform.isIOS) {
-      await _messaging.setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-    }
 
     _foregroundMessageSubscription = FirebaseMessaging.onMessage.listen((
       message,
@@ -213,12 +229,13 @@ class FirebasePushNotificationService implements PushNotificationService {
   void dispose() {
     _foregroundMessageSubscription?.cancel();
     _notificationTapSubscription?.cancel();
+    _iosNotificationEventSubscription?.cancel();
     _foregroundMessageController.close();
     _notificationTapController.close();
   }
 
   bool get _supportsFirebaseMessagingPlatform {
-    return !kIsWeb && (Platform.isIOS || Platform.isAndroid);
+    return !kIsWeb && Platform.isAndroid;
   }
 
   Future<void> _initializeLocalNotifications() async {
@@ -242,6 +259,45 @@ class FirebasePushNotificationService implements PushNotificationService {
             AndroidFlutterLocalNotificationsPlugin
           >();
       await androidPlugin?.createNotificationChannel(_foregroundChannel);
+    }
+  }
+
+  Future<void> _initializeIosNativeNotifications() async {
+    _iosNotificationEventSubscription = _iosNotificationEventsChannel
+        .receiveBroadcastStream()
+        .listen((event) {
+          final eventMap = _asMap(event);
+          final payload = eventMap['payload'];
+
+          if (payload is! String || payload.isEmpty) {
+            return;
+          }
+
+          final intent = PushNotificationIntent.fromNotificationPayload(payload);
+          final type = eventMap['type']?.toString();
+
+          if (type == 'foreground') {
+            _foregroundMessageController.add(
+              PushNotificationForegroundEvent(
+                intent: intent,
+                receivedAt: DateTime.now(),
+              ),
+            );
+            return;
+          }
+
+          if (type == 'opened') {
+            _notificationTapController.add(intent);
+          }
+        });
+
+    final initialPayload = await _iosNotificationMethodChannel.invokeMethod<String>(
+      'getInitialNotificationPayload',
+    );
+
+    if (initialPayload != null && initialPayload.isNotEmpty) {
+      _initialNotificationIntent =
+          PushNotificationIntent.fromNotificationPayload(initialPayload);
     }
   }
 
@@ -275,6 +331,11 @@ class FirebasePushNotificationService implements PushNotificationService {
         importance: Importance.high,
         priority: Priority.high,
         category: AndroidNotificationCategory.message,
+        number: intent.badgeCount,
+      ),
+      iOS: DarwinNotificationDetails(
+        presentBadge: true,
+        badgeNumber: intent.badgeCount,
       ),
     );
 
@@ -293,6 +354,20 @@ class FirebasePushNotificationService implements PushNotificationService {
         intent.conversationId ??
         DateTime.now().millisecondsSinceEpoch.toString();
     return source.hashCode & 0x7fffffff;
+  }
+
+  Map<String, dynamic> _asMap(dynamic payload) {
+    if (payload is Map<String, dynamic>) {
+      return payload;
+    }
+
+    if (payload is Map) {
+      return payload.map((key, value) {
+        return MapEntry(key.toString(), value);
+      });
+    }
+
+    throw StateError('native notification payload must be a map');
   }
 }
 
@@ -347,6 +422,18 @@ String? _extractConversationId(Map<String, dynamic> data) {
   }
 
   return _extractConversationIdFromPath(uri.path);
+}
+
+int? _parseInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is String) {
+    return int.tryParse(value);
+  }
+
+  return null;
 }
 
 String? _extractConversationIdFromPath(String path) {

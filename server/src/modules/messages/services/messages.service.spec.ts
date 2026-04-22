@@ -2,11 +2,13 @@ import { MessageIdempotencyStore } from '../stores/message-idempotency.store';
 
 import { MessagesService } from './messages.service';
 
+import type { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { InMemoryChatModelRepository } from '@app/infra/database/repositories/in-memory-chat-model.repository';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
 import type { MediaAttachmentEntity } from '@app/modules/media/entities/media-attachment.entity';
 import { MediaAttachmentRepository } from '@app/modules/media/repositories/media-attachment.repository';
+import type { NotificationsService } from '@app/modules/notifications/services/notifications.service';
 import type { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 
 class InMemoryMessageIdempotencyStore extends MessageIdempotencyStore {
@@ -125,6 +127,12 @@ describe('MessagesService', () => {
     const authIdentityService = new AuthIdentityService(authRepository);
     const messageIdempotencyStore = new InMemoryMessageIdempotencyStore();
     const mediaAttachmentRepository = new InMemoryMediaAttachmentRepository();
+    const rateLimitService = {
+      consumeOrThrow: jest.fn().mockResolvedValue(undefined),
+    } as unknown as RateLimitService;
+    const notificationsService = {
+      dispatchOfflineMessagePush: jest.fn().mockResolvedValue(undefined),
+    } as unknown as NotificationsService;
     const chatGateway = {
       emitMessageCreated: jest.fn(),
     } as unknown as ChatGateway;
@@ -133,6 +141,8 @@ describe('MessagesService', () => {
       messageIdempotencyStore,
       authIdentityService,
       mediaAttachmentRepository,
+      rateLimitService,
+      notificationsService,
       chatGateway,
     );
 
@@ -141,6 +151,8 @@ describe('MessagesService', () => {
       chatModelRepository,
       chatGateway,
       mediaAttachmentRepository,
+      rateLimitService,
+      notificationsService,
       service,
     };
   }
@@ -276,6 +288,13 @@ describe('MessagesService', () => {
 
     expect(firstAck.message.serverMessageId).toBe(secondAck.message.serverMessageId);
     expect(fixture.chatGateway.emitMessageCreated).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        fixture.notificationsService as unknown as {
+          dispatchOfflineMessagePush: jest.Mock;
+        }
+      ).dispatchOfflineMessagePush,
+    ).toHaveBeenCalledTimes(1);
   });
 
   it('should normalize attachment messages from confirmed media metadata', async () => {
@@ -325,5 +344,40 @@ describe('MessagesService', () => {
       mimeType: 'image/png',
       sizeBytes: 1024,
     });
+  });
+
+  it('should reject sendMessage when the user hits the limiter', async () => {
+    const fixture = createFixture();
+    const alice = await fixture.authRepository.createUser({
+      identifier: 'alice@example.com',
+      nickname: 'Alice',
+      handle: 'alice_user',
+    });
+    const bob = await fixture.authRepository.createUser({
+      identifier: 'bob@example.com',
+      nickname: 'Bob',
+      handle: 'bob_user',
+    });
+    const conversation = await fixture.chatModelRepository.createConversation({
+      type: 'direct',
+      createdBy: alice.id,
+      memberIds: [alice.id, bob.id],
+    });
+    (
+      fixture.rateLimitService as unknown as {
+        consumeOrThrow: jest.Mock;
+      }
+    ).consumeOrThrow.mockRejectedValueOnce(
+      new Error('消息发送过于频繁，请稍后再试'),
+    );
+
+    await expect(
+      fixture.service.sendMessage(alice.id, {
+        conversationId: conversation.id,
+        clientMessageId: 'client-msg-limit-1',
+        type: 'text',
+        text: 'hello',
+      }),
+    ).rejects.toThrow('消息发送过于频繁，请稍后再试');
   });
 });

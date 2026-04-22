@@ -51,10 +51,59 @@ export class AppConfigService {
     return this.getOrThrow('s3SecretKey');
   }
 
+  get fcmProjectId(): string | undefined {
+    return this.getOptional('fcmProjectId');
+  }
+
+  get fcmClientEmail(): string | undefined {
+    return this.getOptional('fcmClientEmail');
+  }
+
+  get fcmPrivateKey(): string | undefined {
+    return this.getOptional('fcmPrivateKey');
+  }
+
+  get apnsTeamId(): string | undefined {
+    return this.getOptional('apnsTeamId');
+  }
+
+  get apnsKeyId(): string | undefined {
+    return this.getOptional('apnsKeyId');
+  }
+
+  get apnsBundleId(): string | undefined {
+    return this.getOptional('apnsBundleId');
+  }
+
+  get apnsPrivateKey(): string | undefined {
+    return this.getOptional('apnsPrivateKey');
+  }
+
+  get adminHandles(): string[] {
+    const rawValue = this.getOptional('adminHandles');
+
+    if (!rawValue) {
+      return [];
+    }
+
+    return rawValue
+      .split(',')
+      .map((handle) => handle.trim())
+      .filter((handle) => handle.length > 0);
+  }
+
   private getOrThrow<Key extends keyof AppEnvironment>(
     key: Key,
   ): AppEnvironment[Key] {
     return this.configService.getOrThrow(key, {
+      infer: true,
+    });
+  }
+
+  private getOptional<Key extends keyof AppEnvironment>(
+    key: Key,
+  ): AppEnvironment[Key] | undefined {
+    return this.configService.get(key, {
       infer: true,
     });
   }

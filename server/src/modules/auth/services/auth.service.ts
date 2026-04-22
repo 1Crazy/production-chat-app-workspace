@@ -21,15 +21,19 @@ import type { AuthenticatedRequest } from '../types/authenticated-request.type';
 
 import { AuthTokenService } from './auth-token.service';
 
+import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 
 @Injectable()
 export class AuthService {
   private readonly verificationCodeTtlSeconds = 60 * 10;
+  private readonly authSourceWindowMs = 10 * 60 * 1000;
+  private readonly authIdentifierWindowMs = 10 * 60 * 1000;
 
   constructor(
     private readonly authRepository: AuthRepository,
     private readonly authTokenService: AuthTokenService,
+    private readonly rateLimitService: RateLimitService,
     @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
   ) {}
@@ -43,12 +47,21 @@ export class AuthService {
 
   async requestCode(
     dto: RequestAuthCodeDto,
+    sourceKey = 'unknown-source',
   ): Promise<{
     identifier: string;
     debugCode: string;
     expiresInSeconds: number;
   }> {
     const normalizedIdentifier = dto.identifier.trim().toLowerCase();
+    await this.assertAuthRateLimit({
+      scope: 'auth.request-code',
+      sourceKey,
+      identifier: normalizedIdentifier,
+      sourceLimit: 6,
+      identifierLimit: 3,
+      message: '验证码请求过于频繁，请稍后再试',
+    });
     const verificationCode = this.generateVerificationCode();
     const expiresAt = new Date(
       Date.now() + this.verificationCodeTtlSeconds * 1000,
@@ -67,8 +80,19 @@ export class AuthService {
     };
   }
 
-  async register(dto: RegisterDto): Promise<AuthResponseDto> {
+  async register(
+    dto: RegisterDto,
+    sourceKey = 'unknown-source',
+  ): Promise<AuthResponseDto> {
     const identifier = dto.identifier.trim().toLowerCase();
+    await this.assertAuthRateLimit({
+      scope: 'auth.register',
+      sourceKey,
+      identifier,
+      sourceLimit: 5,
+      identifierLimit: 3,
+      message: '注册尝试过于频繁，请稍后再试',
+    });
 
     if (await this.authRepository.findUserByIdentifier(identifier)) {
       throw new ConflictException('该标识已完成注册');
@@ -89,8 +113,19 @@ export class AuthService {
     return this.buildAuthResponse(user, session);
   }
 
-  async login(dto: LoginDto): Promise<AuthResponseDto> {
+  async login(
+    dto: LoginDto,
+    sourceKey = 'unknown-source',
+  ): Promise<AuthResponseDto> {
     const identifier = dto.identifier.trim().toLowerCase();
+    await this.assertAuthRateLimit({
+      scope: 'auth.login',
+      sourceKey,
+      identifier,
+      sourceLimit: 10,
+      identifierLimit: 5,
+      message: '登录尝试过于频繁，请稍后再试',
+    });
     const user = await this.authRepository.findUserByIdentifier(identifier);
 
     if (!user || user.disabledAt) {
@@ -256,5 +291,35 @@ export class AuthService {
 
   private generateVerificationCode(): string {
     return `${Math.floor(100000 + Math.random() * 900000)}`;
+  }
+
+  private async assertAuthRateLimit(params: {
+    scope: string;
+    sourceKey: string;
+    identifier: string;
+    sourceLimit: number;
+    identifierLimit: number;
+    message: string;
+  }): Promise<void> {
+    await this.rateLimitService.consumeOrThrow({
+      scope: `${params.scope}.source`,
+      actorKey: params.sourceKey,
+      limit: params.sourceLimit,
+      windowMs: this.authSourceWindowMs,
+      message: params.message,
+      metadata: {
+        identifier: params.identifier,
+      },
+    });
+    await this.rateLimitService.consumeOrThrow({
+      scope: `${params.scope}.identifier`,
+      actorKey: params.identifier,
+      limit: params.identifierLimit,
+      windowMs: this.authIdentifierWindowMs,
+      message: params.message,
+      metadata: {
+        sourceKey: params.sourceKey,
+      },
+    });
   }
 }

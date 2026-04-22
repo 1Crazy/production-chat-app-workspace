@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Req, UseGuards, Post } from '@nestjs/common';
 
 import { RegisterPushTokenDto } from '../dto/register-push-token.dto';
+import { SyncNotificationStateDto } from '../dto/sync-notification-state.dto';
 import { NotificationsService } from '../services/notifications.service';
 
 import { AccessTokenGuard } from '@app/modules/auth/guards/access-token.guard';
@@ -37,5 +38,14 @@ export class NotificationsController {
       request.auth.user.id,
       request.auth.session.id,
     );
+  }
+
+  @UseGuards(AccessTokenGuard)
+  @Post('sync-state')
+  syncState(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: SyncNotificationStateDto,
+  ) {
+    return this.notificationsService.syncState(request.auth.user.id, dto);
   }
 }

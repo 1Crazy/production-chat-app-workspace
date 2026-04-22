@@ -10,6 +10,8 @@ import 'package:production_chat_app/features/media/presentation/pages/media_cent
 import 'package:production_chat_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:production_chat_app/shared/config/app_environment.dart';
 import 'package:production_chat_app/shared/constants/app_constants.dart';
+import 'package:production_chat_app/shared/notifications/app_badge_service.dart';
+import 'package:production_chat_app/shared/notifications/notification_sync_state.dart';
 import 'package:production_chat_app/shared/notifications/push_notification_service.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime_event.dart';
@@ -28,9 +30,12 @@ class _AppShellState extends State<AppShell> {
   ConversationSummary? _selectedConversation;
   int _conversationReloadToken = 0;
   int _chatReloadToken = 0;
+  int _totalUnreadCount = 0;
+  AppBadgeService? _appBadgeService;
   ChatRealtime? _chatRealtime;
   PushNotificationService? _pushNotificationService;
   String? _activeRealtimeToken;
+  Map<String, int> _knownConversationLatestSequenceById = const {};
   StreamSubscription<dynamic>? _sessionRevokedSubscription;
   StreamSubscription<ChatRealtimeConnectionState>? _connectionStateSubscription;
   StreamSubscription<String>? _connectionErrorSubscription;
@@ -45,6 +50,7 @@ class _AppShellState extends State<AppShell> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final dependencies = AppDependenciesScope.of(context);
+    _appBadgeService = dependencies.appBadgeService;
 
     if (_chatRealtime == dependencies.chatRealtime) {
       return;
@@ -110,6 +116,7 @@ class _AppShellState extends State<AppShell> {
         conversationRepository: dependencies.conversationRepository,
         chatRealtime: dependencies.chatRealtime,
         currentUserId: currentUserId,
+        onItemsChanged: _handleConversationItemsChanged,
         selectedConversationId: _selectedConversation?.id,
         isVisible: _currentIndex == 0,
         reloadToken: _conversationReloadToken,
@@ -162,23 +169,23 @@ class _AppShellState extends State<AppShell> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.forum_outlined),
-            selectedIcon: Icon(Icons.forum),
+            icon: _buildConversationDestinationIcon(selected: false),
+            selectedIcon: _buildConversationDestinationIcon(selected: true),
             label: '会话',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),
             selectedIcon: Icon(Icons.chat_bubble),
             label: '消息',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.perm_media_outlined),
             selectedIcon: Icon(Icons.perm_media),
             label: '媒体',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.person_outline),
             selectedIcon: Icon(Icons.person),
             label: '我的',
@@ -232,6 +239,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    unawaited(_appBadgeService?.updateBadgeCount(0) ?? Future<void>.value());
     _sessionRevokedSubscription?.cancel();
     _connectionStateSubscription?.cancel();
     _connectionErrorSubscription?.cancel();
@@ -315,6 +323,26 @@ class _AppShellState extends State<AppShell> {
       return;
     }
 
+    if (event.intent.badgeCount != null) {
+      setState(() {
+        _totalUnreadCount = event.intent.badgeCount!;
+      });
+    }
+
+    final conversationId = event.intent.conversationId;
+    final latestSequence = event.intent.latestSequence;
+
+    if (conversationId != null &&
+        conversationId.isNotEmpty &&
+        latestSequence != null) {
+      _knownConversationLatestSequenceById = {
+        ..._knownConversationLatestSequenceById,
+        conversationId: latestSequence,
+      };
+    }
+
+    unawaited(_synchronizeNotificationState(event.intent));
+
     setState(() {
       _conversationReloadToken += 1;
       if (event.intent.conversationId == _selectedConversation?.id) {
@@ -364,10 +392,13 @@ class _AppShellState extends State<AppShell> {
     final authController = AuthScope.of(context);
     final accessToken = authController.authSession?.accessToken;
     final conversationId = intent.conversationId;
+    final dependencies = AppDependenciesScope.of(context);
 
     if (accessToken == null) {
       return;
     }
+
+    await _synchronizeNotificationState(intent, accessTokenOverride: accessToken);
 
     if (conversationId == null || conversationId.isEmpty) {
       setState(() {
@@ -377,7 +408,6 @@ class _AppShellState extends State<AppShell> {
       return;
     }
 
-    final dependencies = AppDependenciesScope.of(context);
     final conversation = await dependencies.conversationRepository.findById(
       accessToken: accessToken,
       conversationId: conversationId,
@@ -404,6 +434,99 @@ class _AppShellState extends State<AppShell> {
       _conversationReloadToken += 1;
       _chatReloadToken += 1;
     });
+  }
+
+  Future<void> _synchronizeNotificationState(
+    PushNotificationIntent intent, {
+    String? accessTokenOverride,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    final authController = AuthScope.of(context);
+    final accessToken =
+        accessTokenOverride ?? authController.authSession?.accessToken;
+
+    if (accessToken == null) {
+      return;
+    }
+
+    final conversationId = intent.conversationId;
+    final dependencies = AppDependenciesScope.of(context);
+    final conversationStates =
+        conversationId != null && conversationId.isNotEmpty
+            ? [
+                {
+                  'conversationId': conversationId,
+                  'afterSequence':
+                      _knownConversationLatestSequenceById[conversationId] ?? 0,
+                },
+              ]
+            : const <Map<String, Object?>>[];
+
+    try {
+      final syncState = await dependencies.notificationRemoteDataSource.syncState(
+        accessToken: accessToken,
+        conversationStates: conversationStates,
+        pushMessageId: intent.messageId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      _applyNotificationSyncState(syncState);
+    } catch (_) {
+      // 推送恢复失败不阻断用户继续使用，后续页面刷新和 realtime 重连会继续追平。
+    }
+  }
+
+  void _applyNotificationSyncState(NotificationSyncState syncState) {
+    setState(() {
+      _totalUnreadCount = syncState.unreadBadgeCount;
+      _knownConversationLatestSequenceById = {
+        ..._knownConversationLatestSequenceById,
+        for (final item in syncState.conversationStates)
+          item.conversationId: item.latestSequence,
+      };
+      _conversationReloadToken += 1;
+      if (_selectedConversation != null) {
+        _chatReloadToken += 1;
+      }
+    });
+    _syncAppBadgeCount(syncState.unreadBadgeCount);
+  }
+
+  void _handleConversationItemsChanged(List<ConversationSummary> items) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _totalUnreadCount = items.fold(0, (sum, item) => sum + item.unreadCount);
+      _knownConversationLatestSequenceById = {
+        for (final item in items) item.id: item.latestSequence,
+      };
+    });
+    _syncAppBadgeCount(_totalUnreadCount);
+  }
+
+  Widget _buildConversationDestinationIcon({required bool selected}) {
+    final icon = Icon(selected ? Icons.forum : Icons.forum_outlined);
+
+    if (_totalUnreadCount <= 0) {
+      return icon;
+    }
+
+    return Badge(
+      label: Text('$_totalUnreadCount'),
+      child: icon,
+    );
+  }
+
+  void _syncAppBadgeCount(int count) {
+    unawaited(_appBadgeService?.updateBadgeCount(count) ?? Future<void>.value());
   }
 }
 

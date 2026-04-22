@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:production_chat_app/shared/notifications/device_push_token.dart';
 
 abstract class PushTokenProvider {
@@ -16,12 +17,20 @@ class FirebaseMessagingPushTokenProvider implements PushTokenProvider {
   FirebaseMessagingPushTokenProvider({FirebaseMessaging? messaging})
     : _messaging = messaging ?? FirebaseMessaging.instance;
 
+  static const MethodChannel _iosApnsTokenChannel = MethodChannel(
+    'production_chat_app/apns_token',
+  );
+
   final FirebaseMessaging _messaging;
 
   @override
   Future<DevicePushToken?> fetchDevicePushToken() async {
-    if (!_supportsFirebaseMessagingPlatform) {
+    if (!_supportsPushPlatform) {
       return null;
+    }
+
+    if (Platform.isIOS) {
+      return _fetchIosDevicePushToken();
     }
 
     try {
@@ -32,7 +41,6 @@ class FirebaseMessagingPushTokenProvider implements PushTokenProvider {
       final settings = await _messaging.requestPermission(
         alert: true,
         badge: true,
-        provisional: Platform.isIOS,
         sound: true,
       );
 
@@ -40,16 +48,8 @@ class FirebaseMessagingPushTokenProvider implements PushTokenProvider {
         return null;
       }
 
-      if (Platform.isIOS) {
-        final apnsToken = await _waitForApnsToken();
-
-        if (apnsToken == null) {
-          return null;
-        }
-      }
-
       final token = await _messaging.getToken();
-      return _toDevicePushToken(token);
+      return _toFcmDevicePushToken(token);
     } on FirebaseException {
       return null;
     }
@@ -57,31 +57,25 @@ class FirebaseMessagingPushTokenProvider implements PushTokenProvider {
 
   @override
   Stream<DevicePushToken> get tokenRefreshStream {
-    if (!_supportsFirebaseMessagingPlatform || Firebase.apps.isEmpty) {
+    if (!_supportsPushPlatform) {
+      return const Stream<DevicePushToken>.empty();
+    }
+
+    if (Platform.isIOS) {
+      return const Stream<DevicePushToken>.empty();
+    }
+
+    if (Firebase.apps.isEmpty) {
       return const Stream<DevicePushToken>.empty();
     }
 
     return _messaging.onTokenRefresh
-        .asyncMap((token) async {
-          if (Platform.isIOS) {
-            final apnsToken = await _waitForApnsToken();
-
-            if (apnsToken == null) {
-              return null;
-            }
-          }
-
-          return _toDevicePushToken(token);
-        })
-        .where((token) {
-          return token != null;
-        })
-        .map((token) {
-          return token!;
-        });
+        .map((token) => _toFcmDevicePushToken(token))
+        .where((token) => token != null)
+        .map((token) => token!);
   }
 
-  bool get _supportsFirebaseMessagingPlatform {
+  bool get _supportsPushPlatform {
     return !kIsWeb && (Platform.isIOS || Platform.isAndroid);
   }
 
@@ -90,21 +84,24 @@ class FirebaseMessagingPushTokenProvider implements PushTokenProvider {
         status == AuthorizationStatus.notDetermined;
   }
 
-  Future<String?> _waitForApnsToken() async {
-    for (var attempt = 0; attempt < 10; attempt += 1) {
-      final apnsToken = await _messaging.getAPNSToken();
+  Future<DevicePushToken?> _fetchIosDevicePushToken() async {
+    try {
+      final json = await _iosApnsTokenChannel
+          .invokeMapMethod<Object?, Object?>('requestDevicePushToken');
 
-      if (apnsToken != null && apnsToken.isNotEmpty) {
-        return apnsToken;
+      if (json == null) {
+        return null;
       }
 
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      return DevicePushToken.fromJson(json);
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
     }
-
-    return null;
   }
 
-  DevicePushToken? _toDevicePushToken(String? token) {
+  DevicePushToken? _toFcmDevicePushToken(String? token) {
     final normalizedToken = token?.trim();
 
     if (normalizedToken == null || normalizedToken.isEmpty) {
