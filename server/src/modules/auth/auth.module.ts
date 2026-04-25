@@ -6,7 +6,10 @@ import { AuthRepository } from './repositories/auth.repository';
 import { PrismaAuthRepository } from './repositories/prisma-auth.repository';
 import { AuthIdentityService } from './services/auth-identity.service';
 import { AuthPasswordService } from './services/auth-password.service';
+import { AuthRateLimitService } from './services/auth-rate-limit.service';
+import { AuthSessionService } from './services/auth-session.service';
 import { AuthTokenService } from './services/auth-token.service';
+import { AuthVerificationCodeService } from './services/auth-verification-code.service';
 import { AuthService } from './services/auth.service';
 
 import { AbuseModule } from '@app/infra/abuse/abuse.module';
@@ -21,6 +24,9 @@ import { RealtimeModule } from '@app/modules/realtime/realtime.module';
     AuthTokenService,
     AuthPasswordService,
     AuthIdentityService,
+    AuthRateLimitService,
+    AuthSessionService,
+    AuthVerificationCodeService,
     PrismaAuthRepository,
     {
       provide: AuthRepository,

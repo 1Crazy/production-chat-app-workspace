@@ -6,6 +6,8 @@ import { PushRegistrationRepository } from './repositories/push-registration.rep
 import { ApnsPushDeliveryProvider } from './services/apns-push-delivery.provider';
 import { DefaultPushDeliveryProvider } from './services/default-push-delivery.provider';
 import { FcmHttpV1PushDeliveryProvider } from './services/fcm-http-v1-push-delivery.provider';
+import { NotificationPushDispatcherService } from './services/notification-push-dispatcher.service';
+import { NotificationSyncStateService } from './services/notification-sync-state.service';
 import { NotificationsService } from './services/notifications.service';
 import {
   LoggingPushDeliveryProvider,
@@ -21,6 +23,8 @@ import { RealtimeModule } from '@app/modules/realtime/realtime.module';
   controllers: [NotificationsController],
   providers: [
     NotificationsService,
+    NotificationPushDispatcherService,
+    NotificationSyncStateService,
     ApnsPushDeliveryProvider,
     DefaultPushDeliveryProvider,
     FcmHttpV1PushDeliveryProvider,

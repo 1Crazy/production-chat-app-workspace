@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { ConversationsController } from './controllers/conversations.controller';
+import { ConversationViewService } from './services/conversation-view.service';
 import { ConversationsService } from './services/conversations.service';
 
 import { AbuseModule } from '@app/infra/abuse/abuse.module';
@@ -18,7 +19,7 @@ import { RealtimeModule } from '@app/modules/realtime/realtime.module';
     RealtimeModule,
   ],
   controllers: [ConversationsController],
-  providers: [ConversationsService],
+  providers: [ConversationsService, ConversationViewService],
   exports: [ConversationsService],
 })
 export class ConversationsModule {}

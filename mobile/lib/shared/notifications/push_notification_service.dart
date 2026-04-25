@@ -8,6 +8,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
 
+part 'push_notification_models.dart';
+part 'push_notification_payload_parser.dart';
+
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
@@ -20,87 +23,6 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 
-class PushNotificationIntent {
-  const PushNotificationIntent({
-    required this.messageId,
-    required this.title,
-    required this.body,
-    required this.conversationId,
-    required this.badgeCount,
-    required this.latestSequence,
-  });
-
-  factory PushNotificationIntent.fromRemoteMessage(RemoteMessage message) {
-    final data = message.data;
-
-    return PushNotificationIntent(
-      messageId: message.messageId,
-      title:
-          message.notification?.title ??
-          _firstNonEmptyString(data, const ['title', 'senderName']),
-      body:
-          message.notification?.body ??
-          _firstNonEmptyString(data, const [
-            'body',
-            'messagePreview',
-            'preview',
-          ]),
-      conversationId: _extractConversationId(data),
-      badgeCount: _parseInt(data['badgeCount']),
-      latestSequence: _parseInt(data['sequence']),
-    );
-  }
-
-  factory PushNotificationIntent.fromNotificationPayload(String payload) {
-    final decoded = jsonDecode(payload);
-
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('notification payload must be a json object');
-    }
-
-    return PushNotificationIntent(
-      messageId: decoded['messageId'] as String?,
-      title: decoded['title'] as String?,
-      body: decoded['body'] as String?,
-      conversationId: decoded['conversationId'] as String?,
-      badgeCount: decoded['badgeCount'] as int?,
-      latestSequence: decoded['latestSequence'] as int?,
-    );
-  }
-
-  final String? messageId;
-  final String? title;
-  final String? body;
-  final String? conversationId;
-  final int? badgeCount;
-  final int? latestSequence;
-
-  bool get hasConversationTarget {
-    return conversationId != null && conversationId!.isNotEmpty;
-  }
-
-  String toNotificationPayload() {
-    return jsonEncode({
-      'messageId': messageId,
-      'title': title,
-      'body': body,
-      'conversationId': conversationId,
-      'badgeCount': badgeCount,
-      'latestSequence': latestSequence,
-    });
-  }
-}
-
-class PushNotificationForegroundEvent {
-  const PushNotificationForegroundEvent({
-    required this.intent,
-    required this.receivedAt,
-  });
-
-  final PushNotificationIntent intent;
-  final DateTime receivedAt;
-}
-
 abstract class PushNotificationService {
   Future<void> initialize();
 
@@ -111,31 +33,6 @@ abstract class PushNotificationService {
   PushNotificationIntent? takeInitialNotificationIntent();
 
   void dispose();
-}
-
-class NoopPushNotificationService implements PushNotificationService {
-  const NoopPushNotificationService();
-
-  @override
-  Stream<PushNotificationForegroundEvent> get foregroundMessageStream {
-    return const Stream<PushNotificationForegroundEvent>.empty();
-  }
-
-  @override
-  Stream<PushNotificationIntent> get notificationTapStream {
-    return const Stream<PushNotificationIntent>.empty();
-  }
-
-  @override
-  Future<void> initialize() async {}
-
-  @override
-  PushNotificationIntent? takeInitialNotificationIntent() {
-    return null;
-  }
-
-  @override
-  void dispose() {}
 }
 
 class FirebasePushNotificationService implements PushNotificationService {
@@ -298,7 +195,9 @@ class FirebasePushNotificationService implements PushNotificationService {
             return;
           }
 
-          final intent = PushNotificationIntent.fromNotificationPayload(payload);
+          final intent = PushNotificationIntent.fromNotificationPayload(
+            payload,
+          );
           final type = eventMap['type']?.toString();
 
           if (type == 'foreground') {
@@ -316,9 +215,8 @@ class FirebasePushNotificationService implements PushNotificationService {
           }
         });
 
-    final initialPayload = await _iosNotificationMethodChannel.invokeMethod<String>(
-      'getInitialNotificationPayload',
-    );
+    final initialPayload = await _iosNotificationMethodChannel
+        .invokeMethod<String>('getInitialNotificationPayload');
 
     if (initialPayload != null && initialPayload.isNotEmpty) {
       _initialNotificationIntent =
@@ -394,90 +292,4 @@ class FirebasePushNotificationService implements PushNotificationService {
 
     throw StateError('native notification payload must be a map');
   }
-}
-
-String? _firstNonEmptyString(
-  Map<String, dynamic> data,
-  List<String> candidates,
-) {
-  for (final key in candidates) {
-    final rawValue = data[key];
-
-    if (rawValue is String && rawValue.trim().isNotEmpty) {
-      return rawValue.trim();
-    }
-  }
-
-  return null;
-}
-
-String? _extractConversationId(Map<String, dynamic> data) {
-  final directValue = _firstNonEmptyString(data, const [
-    'conversationId',
-    'conversation_id',
-    'chatConversationId',
-    'targetConversationId',
-  ]);
-
-  if (directValue != null) {
-    return directValue;
-  }
-
-  final routeLikeValue = _firstNonEmptyString(data, const [
-    'route',
-    'deepLink',
-    'deeplink',
-    'link',
-  ]);
-
-  if (routeLikeValue == null) {
-    return null;
-  }
-
-  final uri = Uri.tryParse(routeLikeValue);
-
-  if (uri == null) {
-    return _extractConversationIdFromPath(routeLikeValue);
-  }
-
-  final queryConversationId = uri.queryParameters['conversationId'];
-
-  if (queryConversationId != null && queryConversationId.trim().isNotEmpty) {
-    return queryConversationId.trim();
-  }
-
-  return _extractConversationIdFromPath(uri.path);
-}
-
-int? _parseInt(Object? value) {
-  if (value is int) {
-    return value;
-  }
-
-  if (value is String) {
-    return int.tryParse(value);
-  }
-
-  return null;
-}
-
-String? _extractConversationIdFromPath(String path) {
-  final normalizedPath = path.trim();
-
-  if (normalizedPath.isEmpty) {
-    return null;
-  }
-
-  final segments = normalizedPath
-      .split('/')
-      .where((segment) => segment.trim().isNotEmpty)
-      .toList(growable: false);
-
-  for (var index = 0; index < segments.length - 1; index += 1) {
-    if (segments[index] == 'conversations') {
-      return segments[index + 1];
-    }
-  }
-
-  return null;
 }

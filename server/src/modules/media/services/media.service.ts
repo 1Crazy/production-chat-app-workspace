@@ -15,71 +15,19 @@ import {
 } from '../dto/media-attachment.dto';
 import type { RequestUploadTokenDto } from '../dto/request-upload-token.dto';
 import type { UploadTokenDto } from '../dto/upload-token.dto';
-import type {
-  MediaAttachmentKind,
-} from '../entities/media-attachment.entity';
 import { MediaAttachmentRepository } from '../repositories/media-attachment.repository';
 
+import { MediaFilePolicyService } from './media-file-policy.service';
 import { MediaObjectStorageService } from './media-object-storage.service';
 import { MediaProcessingWorkerService } from './media-processing-worker.service';
 
 import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
 
-type MediaFilePolicy = {
-  attachmentKind: MediaAttachmentKind;
-  maxSizeBytes: number;
-  mimeToExtensions: Record<string, string[]>;
-};
-
 @Injectable()
 export class MediaService {
   private readonly uploadExpiresInSeconds = 60 * 10;
   private readonly downloadExpiresInSeconds = 60 * 5;
-  private readonly filePolicies: MediaFilePolicy[] = [
-    {
-      attachmentKind: 'image',
-      maxSizeBytes: 15 * 1024 * 1024,
-      mimeToExtensions: {
-        'image/jpeg': ['jpg', 'jpeg'],
-        'image/png': ['png'],
-        'image/webp': ['webp'],
-        'image/gif': ['gif'],
-      },
-    },
-    {
-      attachmentKind: 'audio',
-      maxSizeBytes: 20 * 1024 * 1024,
-      mimeToExtensions: {
-        'audio/mpeg': ['mp3'],
-        'audio/mp4': ['m4a', 'mp4'],
-        'audio/wav': ['wav'],
-        'audio/aac': ['aac'],
-        'audio/ogg': ['ogg'],
-      },
-    },
-    {
-      attachmentKind: 'file',
-      maxSizeBytes: 50 * 1024 * 1024,
-      mimeToExtensions: {
-        'application/pdf': ['pdf'],
-        'text/plain': ['txt'],
-        'application/zip': ['zip'],
-        'application/msword': ['doc'],
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [
-          'docx',
-        ],
-        'application/vnd.ms-excel': ['xls'],
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': [
-          'xlsx',
-        ],
-        'application/vnd.ms-powerpoint': ['ppt'],
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation': [
-          'pptx',
-        ],
-      },
-    },
-  ];
 
   constructor(
     private readonly mediaObjectStorageService: MediaObjectStorageService,
@@ -87,6 +35,7 @@ export class MediaService {
     private readonly mediaProcessingWorkerService: MediaProcessingWorkerService,
     private readonly chatModelRepository: ChatModelRepository,
     private readonly rateLimitService: RateLimitService,
+    private readonly mediaFilePolicyService: MediaFilePolicyService,
   ) {}
 
   getHealth(): { module: string; status: string } {
@@ -118,8 +67,10 @@ export class MediaService {
 
     const normalizedFileName = dto.fileName.trim();
     const normalizedMimeType = dto.mimeType.trim().toLowerCase();
-    const fileExtension = this.extractFileExtension(normalizedFileName);
-    const filePolicy = this.resolveFilePolicy(normalizedMimeType);
+    const fileExtension =
+      this.mediaFilePolicyService.extractFileExtension(normalizedFileName);
+    const filePolicy =
+      this.mediaFilePolicyService.resolveFilePolicy(normalizedMimeType);
 
     if (!filePolicy) {
       throw new BadRequestException('不支持的附件 MIME 类型');
@@ -136,7 +87,7 @@ export class MediaService {
     }
 
     const attachmentId = randomUUID();
-    const objectKey = this.buildObjectKey({
+    const objectKey = this.mediaFilePolicyService.buildObjectKey({
       attachmentId,
       conversationId: dto.conversationId,
       attachmentKind: filePolicy.attachmentKind,
@@ -280,47 +231,6 @@ export class MediaService {
       downloadUrl: signedDownload.downloadUrl,
       expiresAt: signedDownload.expiresAt.toISOString(),
     };
-  }
-
-  private resolveFilePolicy(mimeType: string): MediaFilePolicy | null {
-    for (const policy of this.filePolicies) {
-      if (policy.mimeToExtensions[mimeType] != null) {
-        return policy;
-      }
-    }
-
-    return null;
-  }
-
-  private extractFileExtension(fileName: string): string {
-    const dotIndex = fileName.lastIndexOf('.');
-
-    if (dotIndex <= 0 || dotIndex === fileName.length - 1) {
-      throw new BadRequestException('文件名必须包含合法扩展名');
-    }
-
-    return fileName.substring(dotIndex + 1).toLowerCase();
-  }
-
-  private buildObjectKey(params: {
-    attachmentId: string;
-    conversationId: string;
-    attachmentKind: MediaAttachmentKind;
-    fileName: string;
-  }): string {
-    const now = new Date();
-    const safeBaseName = params.fileName
-      .replace(/[^a-zA-Z0-9._-]+/g, '_')
-      .replace(/_+/g, '_');
-
-    return [
-      'chat-media',
-      params.conversationId,
-      params.attachmentKind,
-      `${now.getUTCFullYear().toString().padStart(4, '0')}`,
-      `${(now.getUTCMonth() + 1).toString().padStart(2, '0')}`,
-      `${params.attachmentId}-${safeBaseName}`,
-    ].join('/');
   }
 
   private async assertConversationMembership(

@@ -1,7 +1,10 @@
 import { InMemoryAuthRepository } from '../repositories/in-memory-auth.repository';
 
 import { AuthPasswordService } from './auth-password.service';
+import { AuthRateLimitService } from './auth-rate-limit.service';
+import { AuthSessionService } from './auth-session.service';
 import { AuthTokenService } from './auth-token.service';
+import { AuthVerificationCodeService } from './auth-verification-code.service';
 import { AuthService } from './auth.service';
 
 import type { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
@@ -57,13 +60,25 @@ describe('AuthService', () => {
       consumeOrThrow: jest.fn().mockResolvedValue(undefined),
     } as unknown as RateLimitService;
     const authPasswordService = new AuthPasswordService();
+    const authSessionService = new AuthSessionService(
+      authRepository,
+      authTokenService,
+      chatGateway,
+    );
+    const authVerificationCodeService = new AuthVerificationCodeService(
+      authRepository,
+    );
+    const authRateLimitService = new AuthRateLimitService(
+      appConfig,
+      rateLimitService,
+    );
     const service = new AuthService(
       authRepository,
       authPasswordService,
-      authTokenService,
+      authSessionService,
+      authVerificationCodeService,
+      authRateLimitService,
       appConfig,
-      rateLimitService,
-      chatGateway,
     );
 
     return {
@@ -150,13 +165,25 @@ describe('AuthService', () => {
     const rateLimitService = {
       consumeOrThrow: jest.fn(),
     } as unknown as RateLimitService;
+    const authSessionService = new AuthSessionService(
+      authRepository,
+      authTokenService,
+      chatGateway,
+    );
+    const authVerificationCodeService = new AuthVerificationCodeService(
+      authRepository,
+    );
+    const authRateLimitService = new AuthRateLimitService(
+      appConfig,
+      rateLimitService,
+    );
     const service = new AuthService(
       authRepository,
       authPasswordService,
-      authTokenService,
+      authSessionService,
+      authVerificationCodeService,
+      authRateLimitService,
       appConfig,
-      rateLimitService,
-      chatGateway,
     );
 
     await service.requestCode({

@@ -9,6 +9,9 @@ import type {
   ConnectionReadyEvent,
   UserPresenceView,
 } from '../dto/realtime-event.dto';
+import { RealtimeBroadcastService } from '../services/realtime-broadcast.service';
+import { RealtimeConnectionService } from '../services/realtime-connection.service';
+import { RealtimeHeartbeatService } from '../services/realtime-heartbeat.service';
 import { RealtimePresenceService } from '../services/realtime-presence.service';
 import type { RealtimeSocketAdapterService } from '../services/realtime-socket-adapter.service';
 import { RealtimeTypingService } from '../services/realtime-typing.service';
@@ -168,10 +171,24 @@ describe('ChatGateway', () => {
       incrementCounter: jest.fn(),
       setGauge: jest.fn(),
     } as unknown as MetricsRegistryService;
-    const gateway = new ChatGateway(
+    const realtimeConnectionService = new RealtimeConnectionService(
       authTokenService,
       authRepository,
       chatModelRepository,
+      realtimePresenceService,
+    );
+    const realtimeBroadcastService = new RealtimeBroadcastService(
+      realtimePresenceService,
+      metricsRegistryService,
+    );
+    const realtimeHeartbeatService = new RealtimeHeartbeatService(
+      realtimePresenceService,
+    );
+    const gateway = new ChatGateway(
+      chatModelRepository,
+      realtimeBroadcastService,
+      realtimeConnectionService,
+      realtimeHeartbeatService,
       realtimePresenceService,
       realtimeSocketAdapterService,
       realtimeTypingService,

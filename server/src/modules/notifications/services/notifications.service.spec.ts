@@ -2,6 +2,8 @@ import type { RegisterPushTokenDto } from '../dto/register-push-token.dto';
 import type { PushRegistrationEntity } from '../entities/push-registration.entity';
 import { PushRegistrationRepository } from '../repositories/push-registration.repository';
 
+import { NotificationPushDispatcherService } from './notification-push-dispatcher.service';
+import { NotificationSyncStateService } from './notification-sync-state.service';
 import { NotificationsService } from './notifications.service';
 import {
   type PushDeliveryRequest,
@@ -121,7 +123,12 @@ describe('NotificationsService', () => {
       incrementCounter: jest.fn(),
     } as unknown as MetricsRegistryService;
     const pushDeliveryProvider = new RecordingPushDeliveryProvider();
-    const service = new NotificationsService(
+    const syncStateService = new NotificationSyncStateService(
+      authIdentityService,
+      chatModelRepository,
+      metricsRegistryService,
+    );
+    const pushDispatcherService = new NotificationPushDispatcherService(
       pushRegistrationRepository,
       authRepository,
       authIdentityService,
@@ -129,6 +136,12 @@ describe('NotificationsService', () => {
       realtimePresenceService,
       metricsRegistryService,
       pushDeliveryProvider,
+      syncStateService,
+    );
+    const service = new NotificationsService(
+      pushRegistrationRepository,
+      pushDispatcherService,
+      syncStateService,
     );
     const session: DeviceSessionEntity = {
       id: 'session-1',

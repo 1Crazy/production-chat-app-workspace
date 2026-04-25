@@ -1,3 +1,4 @@
+import { ConversationViewService } from './conversation-view.service';
 import { ConversationsService } from './conversations.service';
 
 import type { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
@@ -26,12 +27,17 @@ describe('ConversationsService', () => {
       emitConversationCreated: jest.fn(),
       emitReadCursorUpdated: jest.fn().mockResolvedValue(undefined),
     } as unknown as ChatGateway;
+    const conversationViewService = new ConversationViewService(
+      chatModelRepository,
+      authIdentityService,
+    );
     const service = new ConversationsService(
       chatModelRepository,
       authIdentityService,
       friendshipsService,
       rateLimitService,
       chatGateway,
+      conversationViewService,
     );
 
     return {

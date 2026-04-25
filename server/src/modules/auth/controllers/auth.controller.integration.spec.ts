@@ -17,7 +17,10 @@ import { AuthRepository } from '@app/modules/auth/repositories/auth.repository';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
 import { AuthPasswordService } from '@app/modules/auth/services/auth-password.service';
+import { AuthRateLimitService } from '@app/modules/auth/services/auth-rate-limit.service';
+import { AuthSessionService } from '@app/modules/auth/services/auth-session.service';
 import { AuthTokenService } from '@app/modules/auth/services/auth-token.service';
+import { AuthVerificationCodeService } from '@app/modules/auth/services/auth-verification-code.service';
 import { AuthService } from '@app/modules/auth/services/auth.service';
 import type { AuthenticatedRequest } from '@app/modules/auth/types/authenticated-request.type';
 import { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
@@ -46,6 +49,9 @@ describe('AuthController integration', () => {
         AuthTokenService,
         AuthPasswordService,
         AuthIdentityService,
+        AuthSessionService,
+        AuthVerificationCodeService,
+        AuthRateLimitService,
         AccessTokenGuard,
         {
           provide: AuthRepository,

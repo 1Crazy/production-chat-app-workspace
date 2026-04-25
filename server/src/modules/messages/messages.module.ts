@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 
 import { MessagesController } from './controllers/messages.controller';
+import { MessageContentService } from './services/message-content.service';
+import { MessageReaderService } from './services/message-reader.service';
 import { MessagesService } from './services/messages.service';
 import { MessageIdempotencyStore } from './stores/message-idempotency.store';
 import { RedisMessageIdempotencyStore } from './stores/redis-message-idempotency.store';
@@ -26,6 +28,8 @@ import { RealtimeModule } from '@app/modules/realtime/realtime.module';
   controllers: [MessagesController],
   providers: [
     MessagesService,
+    MessageContentService,
+    MessageReaderService,
     RedisMessageIdempotencyStore,
     {
       provide: MessageIdempotencyStore,

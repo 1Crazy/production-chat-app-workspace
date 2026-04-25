@@ -1,5 +1,7 @@
 import { MessageIdempotencyStore } from '../stores/message-idempotency.store';
 
+import { MessageContentService } from './message-content.service';
+import { MessageReaderService } from './message-reader.service';
 import { MessagesService } from './messages.service';
 
 import type { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
@@ -140,15 +142,23 @@ describe('MessagesService', () => {
     const chatGateway = {
       emitMessageCreated: jest.fn(),
     } as unknown as ChatGateway;
+    const messageContentService = new MessageContentService(
+      mediaAttachmentRepository,
+    );
+    const messageReaderService = new MessageReaderService(
+      chatModelRepository,
+      authIdentityService,
+    );
     const service = new MessagesService(
       chatModelRepository,
       messageIdempotencyStore,
       authIdentityService,
-      mediaAttachmentRepository,
       rateLimitService,
       metricsRegistryService,
       notificationsService,
       chatGateway,
+      messageContentService,
+      messageReaderService,
     );
 
     return {

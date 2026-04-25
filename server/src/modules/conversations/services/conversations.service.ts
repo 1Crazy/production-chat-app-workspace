@@ -6,27 +6,23 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import {
-  type ConversationSummaryView,
-  toConversationSummaryView,
-} from '../dto/conversation-summary.dto';
-import {
-  type ConversationView,
-  type UpsertConversationDto,
-  toConversationView,
+import type { ConversationSummaryView } from '../dto/conversation-summary.dto';
+import type {
+  ConversationView,
+  UpsertConversationDto,
 } from '../dto/conversation.dto';
 import type { CreateDirectConversationDto } from '../dto/create-direct-conversation.dto';
 import type { CreateGroupConversationDto } from '../dto/create-group-conversation.dto';
 import { toReadCursorView, type ReadCursorView } from '../dto/read-cursor.dto';
 import type { UpdateReadCursorDto } from '../dto/update-read-cursor.dto';
 
+import { ConversationViewService } from './conversation-view.service';
+
 import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
-import type { MessageEntity } from '@app/infra/database/entities/message.entity';
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
 import { FriendshipsService } from '@app/modules/friendships/services/friendships.service';
 import { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
-import { toUserDiscoveryProfileDto } from '@app/modules/users/dto/user-profile.dto';
 
 @Injectable()
 export class ConversationsService {
@@ -39,6 +35,7 @@ export class ConversationsService {
     private readonly friendshipsService: FriendshipsService,
     private readonly rateLimitService: RateLimitService,
     private readonly chatGateway: ChatGateway,
+    private readonly conversationViewService: ConversationViewService,
   ) {}
 
   getHealth(): { module: string; status: string } {
@@ -82,7 +79,9 @@ export class ConversationsService {
     if (existingConversation) {
       return {
         reused: true,
-        conversation: await this.buildConversationView(existingConversation.id),
+        conversation: await this.conversationViewService.buildConversationView(
+          existingConversation.id,
+        ),
       };
     }
 
@@ -92,9 +91,9 @@ export class ConversationsService {
         createdBy: requesterUserId,
         memberIds: [requesterUserId, targetUser.id],
       });
-      const conversationView = await this.buildConversationView(conversation.id);
+      const conversationView =
+        await this.conversationViewService.buildConversationView(conversation.id);
 
-      // 新会话建立后立即推送给成员，后续客户端重连时再通过 connection.ready 做房间恢复。
       this.chatGateway.emitConversationCreated(conversationView);
 
       return {
@@ -112,7 +111,9 @@ export class ConversationsService {
         if (racedConversation) {
           return {
             reused: true,
-            conversation: await this.buildConversationView(racedConversation.id),
+            conversation: await this.conversationViewService.buildConversationView(
+              racedConversation.id,
+            ),
           };
         }
       }
@@ -162,9 +163,9 @@ export class ConversationsService {
       createdBy: requesterUserId,
       memberIds,
     });
-    const conversationView = await this.buildConversationView(conversation.id);
+    const conversationView =
+      await this.conversationViewService.buildConversationView(conversation.id);
 
-    // 群聊创建事件需要直接推给初始成员，避免成员必须手动刷新才能看到新群。
     this.chatGateway.emitConversationCreated(conversationView);
 
     return {
@@ -177,33 +178,19 @@ export class ConversationsService {
     conversationId: string,
     requesterUserId: string,
   ): Promise<ConversationView> {
-    const conversation = await this.getAccessibleConversationOrThrow(
-      conversationId,
-      requesterUserId,
-    );
+    const conversation =
+      await this.conversationViewService.getAccessibleConversationOrThrow(
+        conversationId,
+        requesterUserId,
+      );
 
-    return this.buildConversationView(conversation.id);
+    return this.conversationViewService.buildConversationView(conversation.id);
   }
 
-  async listRecentConversations(
+  listRecentConversations(
     requesterUserId: string,
   ): Promise<ConversationSummaryView[]> {
-    await this.authIdentityService.getActiveUserById(requesterUserId);
-
-    const conversationIdSet = new Set(
-      await this.chatModelRepository.listConversationIdsForUser(requesterUserId),
-    );
-    const conversations = (await this.chatModelRepository.listConversations())
-      .filter((conversation) => conversationIdSet.has(conversation.id))
-      .sort((left, right) => {
-        return right.updatedAt.getTime() - left.updatedAt.getTime();
-      });
-
-    return Promise.all(
-      conversations.map((conversation) => {
-        return this.buildConversationSummaryView(conversation.id, requesterUserId);
-      }),
-    );
+    return this.conversationViewService.listRecentConversations(requesterUserId);
   }
 
   async updateReadCursor(
@@ -211,10 +198,11 @@ export class ConversationsService {
     conversationId: string,
     dto: UpdateReadCursorDto,
   ): Promise<ReadCursorView> {
-    const conversation = await this.getAccessibleConversationOrThrow(
-      conversationId,
-      requesterUserId,
-    );
+    const conversation =
+      await this.conversationViewService.getAccessibleConversationOrThrow(
+        conversationId,
+        requesterUserId,
+      );
     const normalizedSequence = Math.min(
       dto.lastReadSequence,
       conversation.latestSequence,
@@ -226,145 +214,14 @@ export class ConversationsService {
     });
     const readCursorView = toReadCursorView(
       cursor,
-      await this.getUnreadCount(conversationId, requesterUserId),
-    );
-
-    // 已读游标的变更需要实时同步给会话其他成员和当前用户其他设备。
-    await this.chatGateway.emitReadCursorUpdated(readCursorView);
-    return readCursorView;
-  }
-
-  private async buildConversationView(
-    conversationId: string,
-  ): Promise<ConversationView> {
-    const conversation =
-      await this.chatModelRepository.getConversationOrThrow(conversationId);
-    const members = await Promise.all(
-      (await this.chatModelRepository.listConversationMembers(conversationId)).map(
-        async (member) => {
-          const user = await this.authIdentityService.getActiveUserById(
-            member.userId,
-          );
-
-          return {
-            member,
-            profile: toUserDiscoveryProfileDto(user),
-          };
-        },
+      await this.conversationViewService.getUnreadCount(
+        conversationId,
+        requesterUserId,
       ),
     );
 
-    return toConversationView({
-      conversation,
-      members,
-    });
-  }
-
-  private async buildConversationSummaryView(
-    conversationId: string,
-    requesterUserId: string,
-  ): Promise<ConversationSummaryView> {
-    const conversation =
-      await this.chatModelRepository.getConversationOrThrow(conversationId);
-    const latestMessage =
-      await this.chatModelRepository.findLatestMessage(conversationId);
-
-    return toConversationSummaryView({
-      id: conversation.id,
-      type: conversation.type,
-      title: await this.resolveConversationTitle(conversation.id, requesterUserId),
-      memberCount: (
-        await this.chatModelRepository.listConversationMemberUserIds(
-          conversation.id,
-        )
-      ).length,
-      latestSequence: conversation.latestSequence,
-      lastMessagePreview: this.buildLastMessagePreview(latestMessage),
-      lastMessageAt: latestMessage?.createdAt ?? null,
-      unreadCount: await this.getUnreadCount(conversation.id, requesterUserId),
-      updatedAt: conversation.updatedAt,
-    });
-  }
-
-  private async getAccessibleConversationOrThrow(
-    conversationId: string,
-    requesterUserId: string,
-  ) {
-    const conversation = await this.chatModelRepository.getConversationOrThrow(
-      conversationId,
-    );
-
-    if (
-      !(await this.chatModelRepository.isConversationMember(
-        conversationId,
-        requesterUserId,
-      ))
-    ) {
-      throw new ForbiddenException('你不是该会话成员');
-    }
-
-    return conversation;
-  }
-
-  private async resolveConversationTitle(
-    conversationId: string,
-    requesterUserId: string,
-  ): Promise<string> {
-    const conversation =
-      await this.chatModelRepository.getConversationOrThrow(conversationId);
-
-    if (conversation.type === 'group') {
-      return conversation.title ?? '未命名群聊';
-    }
-
-    const peer = (
-      await this.chatModelRepository.listConversationMembers(conversationId)
-    ).find((member) => member.userId !== requesterUserId);
-
-    if (!peer) {
-      return '和自己';
-    }
-
-    return (await this.authIdentityService.getActiveUserById(peer.userId))
-      .nickname;
-  }
-
-  private buildLastMessagePreview(message: MessageEntity | null): string {
-    if (!message) {
-      return '还没有消息';
-    }
-
-    if (message.type === 'text') {
-      return String(message.content.text ?? '');
-    }
-
-    if (message.type === 'image') {
-      return '[图片]';
-    }
-
-    if (message.type === 'audio') {
-      return '[语音]';
-    }
-
-    if (message.type === 'file') {
-      return '[文件]';
-    }
-
-    return '[系统消息]';
-  }
-
-  private async getUnreadCount(
-    conversationId: string,
-    requesterUserId: string,
-  ): Promise<number> {
-    const conversation =
-      await this.chatModelRepository.getConversationOrThrow(conversationId);
-    const cursor = await this.chatModelRepository.findReadCursor(
-      conversationId,
-      requesterUserId,
-    );
-
-    return Math.max(conversation.latestSequence - (cursor?.lastReadSequence ?? 0), 0);
+    await this.chatGateway.emitReadCursorUpdated(readCursorView);
+    return readCursorView;
   }
 
   private async resolveTargetUser(

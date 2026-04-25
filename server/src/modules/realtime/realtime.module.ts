@@ -1,6 +1,9 @@
 import { forwardRef, Module } from '@nestjs/common';
 
 import { ChatGateway } from './gateways/chat.gateway';
+import { RealtimeBroadcastService } from './services/realtime-broadcast.service';
+import { RealtimeConnectionService } from './services/realtime-connection.service';
+import { RealtimeHeartbeatService } from './services/realtime-heartbeat.service';
 import { RealtimePresenceService } from './services/realtime-presence.service';
 import { RealtimeSocketAdapterService } from './services/realtime-socket-adapter.service';
 import { RealtimeTypingService } from './services/realtime-typing.service';
@@ -17,6 +20,9 @@ import { AuthModule } from '@app/modules/auth/auth.module';
   imports: [forwardRef(() => AuthModule), CacheModule, DatabaseModule],
   providers: [
     RealtimePresenceService,
+    RealtimeBroadcastService,
+    RealtimeConnectionService,
+    RealtimeHeartbeatService,
     RealtimeSocketAdapterService,
     RealtimeTypingService,
     RedisRealtimePresenceStore,

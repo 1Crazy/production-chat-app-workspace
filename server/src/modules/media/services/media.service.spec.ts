@@ -3,6 +3,7 @@ import { PayloadTooLargeException } from '@nestjs/common';
 import type { MediaAttachmentEntity } from '../entities/media-attachment.entity';
 import { MediaAttachmentRepository } from '../repositories/media-attachment.repository';
 
+import { MediaFilePolicyService } from './media-file-policy.service';
 import { MediaObjectStorageService } from './media-object-storage.service';
 import type { MediaProcessingWorkerService } from './media-processing-worker.service';
 import { MediaService } from './media.service';
@@ -161,6 +162,7 @@ describe('MediaService', () => {
       mediaProcessingWorkerService as unknown as MediaProcessingWorkerService,
       chatModelRepository,
       rateLimitService,
+      new MediaFilePolicyService(),
     );
     const conversation = await chatModelRepository.createConversation({
       type: 'direct',

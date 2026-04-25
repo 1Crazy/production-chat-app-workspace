@@ -1,48 +1,36 @@
 import {
-  BadRequestException,
   ConflictException,
-  Inject,
   Injectable,
   NotFoundException,
   UnauthorizedException,
-  forwardRef,
 } from '@nestjs/common';
 
-import type {
-  AuthResponseDto,
-  DeviceSessionView,
-} from '../dto/auth-response.dto';
-import { toAuthUserView, toDeviceSessionView } from '../dto/auth-response.dto';
+import type { AuthResponseDto } from '../dto/auth-response.dto';
 import type { LoginDto } from '../dto/login.dto';
 import type { RefreshTokenDto } from '../dto/refresh-token.dto';
 import type { RegisterDto } from '../dto/register.dto';
 import type { RequestAuthCodeDto } from '../dto/request-auth-code.dto';
 import type { ResetPasswordDto } from '../dto/reset-password.dto';
-import type { AuthUserEntity } from '../entities/auth-user.entity';
-import type { DeviceSessionEntity } from '../entities/device-session.entity';
 import type { VerificationCodePurpose } from '../entities/verification-code.entity';
 import { AuthRepository } from '../repositories/auth.repository';
 import type { AuthenticatedRequest } from '../types/authenticated-request.type';
 
 import { AuthPasswordService } from './auth-password.service';
-import { AuthTokenService } from './auth-token.service';
+import { AuthRateLimitService } from './auth-rate-limit.service';
+import { AuthSessionService } from './auth-session.service';
+import { AuthVerificationCodeService } from './auth-verification-code.service';
 
-import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { AppConfigService } from '@app/infra/config/app-config.service';
-import { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 
 @Injectable()
 export class AuthService {
-  private readonly verificationCodeTtlSeconds = 60 * 10;
-
   constructor(
     private readonly authRepository: AuthRepository,
     private readonly authPasswordService: AuthPasswordService,
-    private readonly authTokenService: AuthTokenService,
+    private readonly authSessionService: AuthSessionService,
+    private readonly authVerificationCodeService: AuthVerificationCodeService,
+    private readonly authRateLimitService: AuthRateLimitService,
     private readonly appConfigService: AppConfigService,
-    private readonly rateLimitService: RateLimitService,
-    @Inject(forwardRef(() => ChatGateway))
-    private readonly chatGateway: ChatGateway,
   ) {}
 
   getHealth(): { module: string; status: string } {
@@ -63,7 +51,8 @@ export class AuthService {
   }> {
     const normalizedIdentifier = dto.identifier.trim().toLowerCase();
     const purpose = dto.purpose;
-    await this.assertAuthRateLimit({
+
+    await this.authRateLimitService.assertAuthRateLimit({
       scope: `auth.request-code.${purpose}`,
       sourceKey,
       identifier: normalizedIdentifier,
@@ -71,23 +60,16 @@ export class AuthService {
       identifierLimit: this.appConfigService.authRequestCodeIdentifierLimit,
       message: '验证码请求过于频繁，请稍后再试',
     });
-    const verificationCode = this.generateVerificationCode();
-    const expiresAt = new Date(
-      Date.now() + this.verificationCodeTtlSeconds * 1000,
-    );
-
-    await this.authRepository.createVerificationCode(
-      normalizedIdentifier,
+    const issuedCode = await this.authVerificationCodeService.issueCode({
+      identifier: normalizedIdentifier,
       purpose,
-      verificationCode,
-      expiresAt,
-    );
+    });
 
     return {
       identifier: normalizedIdentifier,
       purpose,
-      debugCode: verificationCode,
-      expiresInSeconds: this.verificationCodeTtlSeconds,
+      debugCode: issuedCode.debugCode,
+      expiresInSeconds: issuedCode.expiresInSeconds,
     };
   }
 
@@ -96,7 +78,8 @@ export class AuthService {
     sourceKey = 'unknown-source',
   ): Promise<AuthResponseDto> {
     const identifier = dto.identifier.trim().toLowerCase();
-    await this.assertAuthRateLimit({
+
+    await this.authRateLimitService.assertAuthRateLimit({
       scope: 'auth.register',
       sourceKey,
       identifier,
@@ -109,7 +92,11 @@ export class AuthService {
       throw new ConflictException('该标识已完成注册');
     }
 
-    await this.assertVerificationCode(identifier, 'register', dto.code);
+    await this.authVerificationCodeService.assertVerificationCode(
+      identifier,
+      'register',
+      dto.code,
+    );
     const passwordHash = await this.authPasswordService.hashPassword(
       dto.password,
     );
@@ -120,13 +107,12 @@ export class AuthService {
       passwordHash,
       passwordUpdatedAt: new Date(),
     });
-    const session = await this.authRepository.createSession({
+    const session = await this.authSessionService.createSessionForUser({
       userId: user.id,
-      deviceName: dto.deviceName?.trim() || 'flutter-device',
-      refreshNonce: this.authTokenService.issueRefreshNonce(),
+      deviceName: dto.deviceName,
     });
 
-    return this.buildAuthResponse(user, session);
+    return this.authSessionService.buildAuthResponse(user, session);
   }
 
   async login(
@@ -134,7 +120,8 @@ export class AuthService {
     sourceKey = 'unknown-source',
   ): Promise<AuthResponseDto> {
     const identifier = dto.identifier.trim().toLowerCase();
-    await this.assertAuthRateLimit({
+
+    await this.authRateLimitService.assertAuthRateLimit({
       scope: 'auth.login',
       sourceKey,
       identifier,
@@ -161,13 +148,12 @@ export class AuthService {
       throw new UnauthorizedException('账号或密码不正确');
     }
 
-    const session = await this.authRepository.createSession({
+    const session = await this.authSessionService.createSessionForUser({
       userId: user.id,
-      deviceName: dto.deviceName?.trim() || 'flutter-device',
-      refreshNonce: this.authTokenService.issueRefreshNonce(),
+      deviceName: dto.deviceName,
     });
 
-    return this.buildAuthResponse(user, session);
+    return this.authSessionService.buildAuthResponse(user, session);
   }
 
   async resetPassword(
@@ -175,7 +161,8 @@ export class AuthService {
     sourceKey = 'unknown-source',
   ): Promise<{ success: boolean }> {
     const identifier = dto.identifier.trim().toLowerCase();
-    await this.assertAuthRateLimit({
+
+    await this.authRateLimitService.assertAuthRateLimit({
       scope: 'auth.reset-password',
       sourceKey,
       identifier,
@@ -189,7 +176,11 @@ export class AuthService {
       throw new NotFoundException('账号不存在或已被禁用');
     }
 
-    await this.assertVerificationCode(identifier, 'reset-password', dto.code);
+    await this.authVerificationCodeService.assertVerificationCode(
+      identifier,
+      'reset-password',
+      dto.code,
+    );
     user.passwordHash = await this.authPasswordService.hashPassword(
       dto.password,
     );
@@ -200,131 +191,32 @@ export class AuthService {
     };
   }
 
-  async refresh(dto: RefreshTokenDto): Promise<AuthResponseDto> {
-    const payload = this.authTokenService.verifyRefreshToken(dto.refreshToken);
-    const session = await this.authRepository.findActiveSessionById(
-      payload.sid,
-    );
-    const user = await this.authRepository.findActiveUserById(payload.sub);
-
-    if (!session || !user || session.userId !== user.id) {
-      throw new UnauthorizedException('刷新会话不存在或已失效');
-    }
-
-    if (session.refreshNonce !== payload.nonce) {
-      throw new UnauthorizedException('刷新令牌已轮换，请重新登录');
-    }
-
-    session.refreshNonce = this.authTokenService.issueRefreshNonce();
-    session.lastSeenAt = new Date();
-    await this.authRepository.saveSession(session);
-    return this.buildAuthResponse(user, session);
+  refresh(dto: RefreshTokenDto): Promise<AuthResponseDto> {
+    return this.authSessionService.refresh(dto);
   }
 
-  async getCurrentProfile(request: AuthenticatedRequest): Promise<{
-    user: ReturnType<typeof toAuthUserView>;
-    currentSession: DeviceSessionView;
-  }> {
-    return {
-      user: toAuthUserView(request.auth.user),
-      currentSession: toDeviceSessionView(
-        request.auth.session,
-        request.auth.session.id,
-      ),
-    };
-  }
-
-  async listSessions(
+  getCurrentProfile(
     request: AuthenticatedRequest,
-  ): Promise<DeviceSessionView[]> {
-    const sessions = await this.authRepository.listActiveSessionsByUserId(
-      request.auth.user.id,
-    );
-
-    return sessions.map((session) => {
-      return toDeviceSessionView(session, request.auth.session.id);
-    });
+  ): ReturnType<AuthSessionService['getCurrentProfile']> {
+    return this.authSessionService.getCurrentProfile(request);
   }
 
-  async revokeSession(
+  listSessions(request: AuthenticatedRequest) {
+    return this.authSessionService.listSessions(request);
+  }
+
+  revokeSession(
     request: AuthenticatedRequest,
     sessionId: string,
   ): Promise<{
     success: boolean;
     revokedSessionId: string;
   }> {
-    const targetSession =
-      await this.authRepository.findActiveSessionById(sessionId);
-
-    if (!targetSession || targetSession.userId !== request.auth.user.id) {
-      throw new NotFoundException('设备会话不存在');
-    }
-
-    await this.authRepository.revokeSession(sessionId);
-    // 设备会话一旦被撤销，对应长连接也必须立即下线，避免继续接收实时事件。
-    await this.chatGateway.disconnectSession(sessionId);
-    return {
-      success: true,
-      revokedSessionId: sessionId,
-    };
+    return this.authSessionService.revokeSession(request, sessionId);
   }
 
-  async logout(request: AuthenticatedRequest): Promise<{ success: boolean }> {
-    await this.authRepository.revokeSession(request.auth.session.id);
-    await this.chatGateway.disconnectSession(request.auth.session.id, 'logout');
-    return {
-      success: true,
-    };
-  }
-
-  private async assertVerificationCode(
-    identifier: string,
-    purpose: VerificationCodePurpose,
-    code: string,
-  ): Promise<void> {
-    const verificationCode = await this.authRepository.findVerificationCode(
-      identifier,
-      purpose,
-    );
-    const purposeLabel = this.getVerificationCodePurposeLabel(purpose);
-
-    if (!verificationCode) {
-      throw new BadRequestException(`请先获取${purposeLabel}验证码`);
-    }
-
-    if (verificationCode.consumedAt) {
-      throw new BadRequestException(`${purposeLabel}验证码已使用，请重新获取`);
-    }
-
-    if (verificationCode.expiresAt.getTime() <= Date.now()) {
-      throw new BadRequestException(`${purposeLabel}验证码已过期，请重新获取`);
-    }
-
-    if (verificationCode.code !== code.trim()) {
-      throw new BadRequestException(`${purposeLabel}验证码不正确`);
-    }
-
-    verificationCode.consumedAt = new Date();
-    await this.authRepository.saveVerificationCode(verificationCode);
-  }
-
-  private buildAuthResponse(
-    user: AuthUserEntity,
-    session: DeviceSessionEntity,
-  ): AuthResponseDto {
-    return {
-      accessToken: this.authTokenService.createAccessToken({
-        userId: user.id,
-        sessionId: session.id,
-      }),
-      refreshToken: this.authTokenService.createRefreshToken({
-        userId: user.id,
-        sessionId: session.id,
-        nonce: session.refreshNonce,
-      }),
-      user: toAuthUserView(user),
-      currentSession: toDeviceSessionView(session, session.id),
-    };
+  logout(request: AuthenticatedRequest): Promise<{ success: boolean }> {
+    return this.authSessionService.logout(request);
   }
 
   private async buildUniqueHandle(identifier: string): Promise<string> {
@@ -347,57 +239,5 @@ export class AuthService {
     }
 
     throw new ConflictException('系统暂时无法分配唯一标识，请稍后重试');
-  }
-
-  private generateVerificationCode(): string {
-    return `${Math.floor(100000 + Math.random() * 900000)}`;
-  }
-
-  private getVerificationCodePurposeLabel(
-    purpose: VerificationCodePurpose,
-  ): string {
-    switch (purpose) {
-      case 'register':
-        return '注册';
-      case 'reset-password':
-        return '重置密码';
-    }
-  }
-
-  private async assertAuthRateLimit(params: {
-    scope: string;
-    sourceKey: string;
-    identifier: string;
-    sourceLimit: number;
-    identifierLimit: number;
-    message: string;
-  }): Promise<void> {
-    if (!this.appConfigService.authRateLimitEnabled) {
-      return;
-    }
-
-    const windowMs =
-      this.appConfigService.authRateLimitWindowMinutes * 60 * 1000;
-
-    await this.rateLimitService.consumeOrThrow({
-      scope: `${params.scope}.source`,
-      actorKey: params.sourceKey,
-      limit: params.sourceLimit,
-      windowMs,
-      message: params.message,
-      metadata: {
-        identifier: params.identifier,
-      },
-    });
-    await this.rateLimitService.consumeOrThrow({
-      scope: `${params.scope}.identifier`,
-      actorKey: params.identifier,
-      limit: params.identifierLimit,
-      windowMs,
-      message: params.message,
-      metadata: {
-        sourceKey: params.sourceKey,
-      },
-    });
   }
 }
