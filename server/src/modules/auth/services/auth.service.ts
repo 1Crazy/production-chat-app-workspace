@@ -1,5 +1,7 @@
 import {
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -65,6 +67,7 @@ export class AuthService {
     const issuedCode = await this.authVerificationCodeService.issueCode({
       identifier: normalizedIdentifier,
       purpose,
+      sourceKey,
     });
     await this.authCodeDeliveryService.deliverVerificationCode({
       identifier: normalizedIdentifier,
@@ -108,6 +111,7 @@ export class AuthService {
       identifier,
       'register',
       dto.code,
+      sourceKey,
     );
     const passwordHash = await this.authPasswordService.hashPassword(
       dto.password,
@@ -183,18 +187,12 @@ export class AuthService {
       identifierLimit: this.appConfigService.authResetPasswordIdentifierLimit,
       message: '重置密码尝试过于频繁，请稍后再试',
     });
+    await this.assertResetPasswordIdentity(identifier, dto.code, sourceKey);
     const user = await this.authRepository.findUserByIdentifier(identifier);
 
     if (!user || user.disabledAt) {
-      // 不区分"不存在"和"禁用"，防止用户枚举攻击
       throw new NotFoundException('账号验证失败');
     }
-
-    await this.authVerificationCodeService.assertVerificationCode(
-      identifier,
-      'reset-password',
-      dto.code,
-    );
     user.passwordHash = await this.authPasswordService.hashPassword(
       dto.password,
     );
@@ -253,5 +251,29 @@ export class AuthService {
     }
 
     throw new ConflictException('系统暂时无法分配唯一标识，请稍后重试');
+  }
+
+  private async assertResetPasswordIdentity(
+    identifier: string,
+    code: string,
+    sourceKey: string,
+  ): Promise<void> {
+    try {
+      await this.authVerificationCodeService.assertVerificationCode(
+        identifier,
+        'reset-password',
+        code,
+        sourceKey,
+      );
+    } catch (error) {
+      if (
+        error instanceof HttpException &&
+        error.getStatus() === HttpStatus.TOO_MANY_REQUESTS
+      ) {
+        throw error;
+      }
+
+      throw new NotFoundException('账号验证失败');
+    }
   }
 }

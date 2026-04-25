@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { parseCorsAllowedOrigins } from './cors.util';
 import type { AppEnvironment } from './env.schema';
 
 @Injectable()
@@ -20,12 +21,7 @@ export class AppConfigService {
   }
 
   get corsAllowedOrigins(): string[] {
-    // 从环境变量读取逗号分隔的域名白名单，生产环境必须显式配置。
-    const rawValue = this.getOrThrow('corsAllowedOrigins');
-    return rawValue
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter((origin) => origin.length > 0);
+    return parseCorsAllowedOrigins(this.getOrThrow('corsAllowedOrigins'));
   }
 
   get databaseUrl(): string {

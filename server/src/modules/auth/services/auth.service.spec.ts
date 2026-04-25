@@ -82,6 +82,7 @@ describe('AuthService', () => {
     } as unknown as ChatGateway;
     const rateLimitService = {
       consumeOrThrow: jest.fn().mockResolvedValue(undefined),
+      reset: jest.fn().mockResolvedValue(undefined),
     } as unknown as RateLimitService;
     const authPasswordService = new AuthPasswordService();
     const authSessionService = new AuthSessionService(
@@ -281,5 +282,94 @@ describe('AuthService', () => {
         deviceName: 'alice-ipad',
       }),
     ).rejects.toThrow('账号或密码不匹配');
+  });
+
+  it('should scope verification retries to the source and identifier pair', async () => {
+    const fixture = createFixture({
+      authRateLimitEnabled: false,
+    });
+
+    const requestCode = await fixture.service.requestCode(
+      {
+        identifier: 'alice@example.com',
+        purpose: 'register',
+      },
+      'source-a',
+    );
+
+    await expect(
+      fixture.service.register(
+        {
+          identifier: 'alice@example.com',
+          code: '000000',
+          password: 'Alice1234',
+          nickname: 'Alice',
+          deviceName: 'alice-phone',
+        },
+        'source-b',
+      ),
+    ).rejects.toThrow('注册验证码不正确');
+
+    const rateLimit = fixture.rateLimitService as unknown as {
+      consumeOrThrow: jest.Mock;
+      reset: jest.Mock;
+    };
+
+    expect(rateLimit.reset).toHaveBeenCalledWith({
+      scope: 'auth.assert-code.register',
+      actorKey: 'source-a::alice@example.com',
+    });
+    expect(rateLimit.consumeOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'auth.assert-code.register',
+        actorKey: 'source-b::alice@example.com',
+      }),
+    );
+    expect(requestCode.debugCode).toMatch(/^\d{6}$/);
+  });
+
+  it('should mask reset-password verification failures behind one message', async () => {
+    const fixture = createFixture({
+      authRateLimitEnabled: false,
+    });
+    const code = await fixture.service.requestCode(
+      {
+        identifier: 'alice@example.com',
+        purpose: 'register',
+      },
+      'source-1',
+    );
+    await fixture.service.register(
+      {
+        identifier: 'alice@example.com',
+        code: requireDebugCode(code),
+        password: 'Alice1234',
+        nickname: 'Alice',
+        deviceName: 'alice-phone',
+      },
+      'source-1',
+    );
+
+    await expect(
+      fixture.service.resetPassword(
+        {
+          identifier: 'alice@example.com',
+          code: '000000',
+          password: 'Alice5678',
+        },
+        'source-1',
+      ),
+    ).rejects.toThrow('账号验证失败');
+
+    await expect(
+      fixture.service.resetPassword(
+        {
+          identifier: 'ghost@example.com',
+          code: '123456',
+          password: 'Ghost1234',
+        },
+        'source-1',
+      ),
+    ).rejects.toThrow('账号验证失败');
   });
 });

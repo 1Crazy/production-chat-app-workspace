@@ -1,10 +1,12 @@
-import helmet from 'helmet';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
 
 import { AppModule } from './app.module';
 import { AppConfigService } from './infra/config/app-config.service';
+import { resolveCorsOriginOption } from './infra/config/cors.util';
 import { AppLoggerService } from './infra/logger/app-logger.service';
+import { ConfigurableSocketIoAdapter } from './infra/realtime/configurable-socket-io.adapter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, {
@@ -17,18 +19,10 @@ async function bootstrap(): Promise<void> {
 
   // 安全响应头：添加 CSP、HSTS、X-Content-Type-Options 等 HTTP 安全头。
   app.use(helmet());
-
-  // 只允许配置的白名单域名跨域访问，生产环境不应使用通配符。
-  const allowedOrigins = config.corsAllowedOrigins;
-  const corsOrigin =
-    allowedOrigins.length === 1 && allowedOrigins[0] === '*'
-      ? true
-      : allowedOrigins.length > 0
-        ? allowedOrigins
-        : false;
+  app.useWebSocketAdapter(new ConfigurableSocketIoAdapter(app, config));
 
   app.enableCors({
-    origin: corsOrigin,
+    origin: resolveCorsOriginOption(config.corsAllowedOrigins),
     credentials: true,
   });
 

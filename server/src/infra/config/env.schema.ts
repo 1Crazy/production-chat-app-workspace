@@ -1,3 +1,5 @@
+import { assertCorsAllowedOrigins, parseCorsAllowedOrigins } from './cors.util';
+
 export interface AppEnvironment {
   readonly appName: string;
   readonly nodeEnv: string;
@@ -112,6 +114,9 @@ export function validateEnv(
       : nodeEnv === 'production'
         ? ''
         : '*';
+  const parsedCorsAllowedOrigins = parseCorsAllowedOrigins(corsAllowedOrigins);
+
+  assertCorsAllowedOrigins(nodeEnv, parsedCorsAllowedOrigins);
 
   return {
     appName: String(rawConfig.APP_NAME),

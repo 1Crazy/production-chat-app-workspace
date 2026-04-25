@@ -63,6 +63,7 @@ describe('AuthController integration', () => {
           provide: RateLimitService,
           useValue: {
             consumeOrThrow: jest.fn().mockResolvedValue(undefined),
+            reset: jest.fn().mockResolvedValue(undefined),
           },
         },
         {

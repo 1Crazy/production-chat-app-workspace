@@ -21,6 +21,7 @@ export class AuthVerificationCodeService {
   async issueCode(params: {
     identifier: string;
     purpose: VerificationCodePurpose;
+    sourceKey?: string;
   }): Promise<{
     debugCode: string;
     expiresInSeconds: number;
@@ -40,7 +41,10 @@ export class AuthVerificationCodeService {
     // 新验证码签发时重置之前的重试计数器，让用户获得完整的尝试次数。
     await this.rateLimitService.reset({
       scope: `auth.assert-code.${params.purpose}`,
-      actorKey: params.identifier,
+      actorKey: this.buildAttemptActorKey(
+        params.identifier,
+        params.sourceKey ?? 'unknown-source',
+      ),
     });
 
     return {
@@ -53,12 +57,13 @@ export class AuthVerificationCodeService {
     identifier: string,
     purpose: VerificationCodePurpose,
     code: string,
+    sourceKey = 'unknown-source',
   ): Promise<void> {
     // 先检查重试限流，防止暴力枚举验证码。
     // 如果触发限流，在窗口期内不管输入是否正确都会被拒绝。
     await this.rateLimitService.consumeOrThrow({
       scope: `auth.assert-code.${purpose}`,
-      actorKey: identifier,
+      actorKey: this.buildAttemptActorKey(identifier, sourceKey),
       limit: this.maxVerifyAttempts,
       windowMs: this.verificationCodeTtlSeconds * 1000,
       message: '验证码尝试次数过多，请重新获取',
@@ -93,6 +98,12 @@ export class AuthVerificationCodeService {
   private generateVerificationCode(): string {
     // 使用密码学安全的随机数替代 Math.random，防止预测。
     return `${randomInt(100000, 1000000)}`;
+  }
+
+  private buildAttemptActorKey(identifier: string, sourceKey: string): string {
+    return `${sourceKey.trim().toLowerCase()}::${identifier
+      .trim()
+      .toLowerCase()}`;
   }
 
   private getVerificationCodePurposeLabel(
