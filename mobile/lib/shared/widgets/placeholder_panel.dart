@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:production_chat_app/shared/widgets/status_surfaces.dart';
 
 class PlaceholderPanel extends StatelessWidget {
   const PlaceholderPanel({
@@ -12,18 +13,10 @@ class PlaceholderPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(description),
-          ],
-        ),
-      ),
+    return AppEmptyStateCard(
+      title: title,
+      description: description,
+      icon: Icons.dashboard_customize_outlined,
     );
   }
 }

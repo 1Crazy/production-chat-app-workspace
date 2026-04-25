@@ -14,6 +14,8 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:dev:docker-local": "NODE_ENV=docker-local prisma migrate dev",
     "test": "jest",
+    "test:contract": "jest src/modules/auth/controllers/auth.controller.contract.spec.ts",
+    "test:integration": "jest src/modules/auth/controllers/auth.controller.integration.spec.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 CREATE TABLE "admin_audit_logs" (
-  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-  "actor_user_id" UUID,
+  "id" TEXT NOT NULL,
+  "actor_user_id" TEXT,
   "action" TEXT NOT NULL,
   "target_type" TEXT NOT NULL,
   "target_id" TEXT NOT NULL,

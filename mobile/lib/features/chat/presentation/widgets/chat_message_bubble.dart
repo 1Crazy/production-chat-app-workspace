@@ -9,6 +9,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.statusCaption,
     this.onShowReadMembers,
     this.onRetry,
+    this.onAvatarTap,
   });
 
   final ChatMessage message;
@@ -16,6 +17,7 @@ class ChatMessageBubble extends StatelessWidget {
   final String? statusCaption;
   final VoidCallback? onShowReadMembers;
   final Future<void> Function()? onRetry;
+  final VoidCallback? onAvatarTap;
 
   @override
   Widget build(BuildContext context) {
@@ -25,60 +27,174 @@ class ChatMessageBubble extends StatelessWidget {
       ChatMessageDeliveryState.failed => '发送失败',
     };
 
-    return Align(
-      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 320),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: isMine
-                ? Theme.of(context).colorScheme.primaryContainer
-                : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  message.senderName,
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-                const SizedBox(height: 8),
-                _ChatMessageBody(message: message),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isMine) ...[
+            _ChatAvatar(
+              label: message.senderName,
+              isMine: false,
+              onTap: onAvatarTap,
+            ),
+            const SizedBox(width: 7),
+          ],
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.66,
+              ),
+              child: Column(
+                crossAxisAlignment: isMine
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  if (!isMine) ...[
                     Text(
-                      statusText,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (message.deliveryState ==
-                            ChatMessageDeliveryState.failed &&
-                        onRetry != null) ...[
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: () {
-                          onRetry!();
-                        },
-                        child: const Text('重试'),
+                      message.senderName,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF98A2B3),
+                        fontSize: 11,
                       ),
-                    ],
-                    if (statusCaption != null) ...[
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: onShowReadMembers,
-                        child: Text(
-                          statusCaption!,
-                          style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 3),
+                  ],
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: isMine
+                          ? const Color(0xFF3478F6)
+                          : const Color(0xFFF7F8FC),
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(17),
+                        topRight: const Radius.circular(17),
+                        bottomLeft: Radius.circular(isMine ? 17 : 6),
+                        bottomRight: Radius.circular(isMine ? 6 : 17),
+                      ),
+                      border: isMine
+                          ? null
+                          : Border.all(color: const Color(0xFFF0F2F7)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 13,
+                        vertical: 10,
+                      ),
+                      child: DefaultTextStyle(
+                        style: Theme.of(context).textTheme.bodyLarge!.copyWith(
+                          color: isMine
+                              ? Colors.white
+                              : const Color(0xFF101828),
+                          height: 1.3,
+                          fontSize: 15,
+                        ),
+                        child: _ChatMessageBody(
+                          message: message,
+                          isMine: isMine,
                         ),
                       ),
-                    ],
-                  ],
-                ),
-              ],
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: isMine ? 0 : 4,
+                      right: isMine ? 4 : 0,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (statusCaption != null) ...[
+                          GestureDetector(
+                            onTap: onShowReadMembers,
+                            child: Text(
+                              statusCaption!,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: const Color(0xFF98A2B3),
+                                    fontSize: 11,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Text(
+                          statusText,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: isMine
+                                    ? const Color(0xFFAFC7FF)
+                                    : const Color(0xFF98A2B3),
+                                fontSize: 11,
+                              ),
+                        ),
+                        if (message.deliveryState ==
+                                ChatMessageDeliveryState.failed &&
+                            onRetry != null) ...[
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () async {
+                              await onRetry!();
+                            },
+                            child: Text(
+                              '重试',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: const Color(0xFF2D8CFF),
+                                    fontSize: 11,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isMine) ...[
+            const SizedBox(width: 7),
+            _ChatAvatar(
+              label: message.senderName,
+              isMine: true,
+              onTap: onAvatarTap,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatAvatar extends StatelessWidget {
+  const _ChatAvatar({required this.label, required this.isMine, this.onTap});
+
+  final String label;
+  final bool isMine;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(9),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: isMine ? const Color(0xFFEAF1FF) : const Color(0xFFF2F4F7),
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Center(
+          child: Text(
+            label.characters.first,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: isMine ? const Color(0xFF2F6BFF) : const Color(0xFF344054),
+              fontSize: 15,
             ),
           ),
         ),
@@ -88,9 +204,10 @@ class ChatMessageBubble extends StatelessWidget {
 }
 
 class _ChatMessageBody extends StatelessWidget {
-  const _ChatMessageBody({required this.message});
+  const _ChatMessageBody({required this.message, required this.isMine});
 
   final ChatMessage message;
+  final bool isMine;
 
   @override
   Widget build(BuildContext context) {
@@ -110,9 +227,21 @@ class _ChatMessageBody extends StatelessWidget {
       case ChatMessageKind.image:
         return _ChatImageMessageCard(content: mediaContent);
       case ChatMessageKind.audio:
-        return _ChatAudioMessageCard(content: mediaContent);
+        return _AttachmentLine(
+          icon: Icons.multitrack_audio_rounded,
+          label: mediaContent.fileName,
+          status: mediaContent.attachmentStatus,
+          subtitle:
+              '${mediaContent.mimeType} · ${_formatBytes(mediaContent.sizeBytes)}',
+        );
       case ChatMessageKind.file:
-        return _ChatFileMessageCard(content: mediaContent);
+        return _AttachmentLine(
+          icon: Icons.insert_drive_file_outlined,
+          label: mediaContent.fileName,
+          status: mediaContent.attachmentStatus,
+          subtitle:
+              '${mediaContent.mimeType} · ${_formatBytes(mediaContent.sizeBytes)}',
+        );
       case ChatMessageKind.text:
         return Text(mediaContent.fileName);
     }
@@ -126,309 +255,169 @@ class _ChatImageMessageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusTheme = _AttachmentVisualState.fromStatus(content.attachmentStatus);
+    final theme = _AttachmentVisualState.fromStatus(content.attachmentStatus);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AspectRatio(
-          aspectRatio: 4 / 3,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFD8E8FF), Color(0xFFF5F9FF)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 180,
+            height: 180,
+            color: const Color(0xFFF1F4F8),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
                     ),
-                    border: Border.all(color: statusTheme.borderColor),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        statusTheme.centerIcon,
-                        size: 40,
-                        color: statusTheme.accentColor,
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          content.fileName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: statusTheme.accentColor),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 10,
-                right: 10,
-                child: _AttachmentStateBadge(theme: statusTheme),
-              ),
-              if (content.attachmentStatus ==
-                  ChatMediaAttachmentStatus.processing)
-                Positioned.fill(
-                  child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.72),
-                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                    child: const Center(
-                      child: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                    child: Text(
+                      _attachmentStatusLabel(content.attachmentStatus),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: theme.color,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                 ),
-            ],
+                Center(child: Icon(theme.icon, size: 42, color: theme.color)),
+                if (content.attachmentStatus ==
+                    ChatMediaAttachmentStatus.processing)
+                  const Center(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
-        const SizedBox(height: 8),
-        _AttachmentMeta(content: content),
-      ],
-    );
-  }
-}
-
-class _ChatAudioMessageCard extends StatelessWidget {
-  const _ChatAudioMessageCard({required this.content});
-
-  final ChatMediaMessageContent content;
-
-  @override
-  Widget build(BuildContext context) {
-    final statusTheme = _AttachmentVisualState.fromStatus(content.attachmentStatus);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: statusTheme.backgroundColor,
-        border: Border.all(color: statusTheme.borderColor),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: statusTheme.badgeBackgroundColor,
-              child: Icon(
-                statusTheme.centerIcon,
-                color: statusTheme.accentColor,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _AttachmentMeta(content: content),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ChatFileMessageCard extends StatelessWidget {
-  const _ChatFileMessageCard({required this.content});
-
-  final ChatMediaMessageContent content;
-
-  @override
-  Widget build(BuildContext context) {
-    final statusTheme = _AttachmentVisualState.fromStatus(content.attachmentStatus);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: statusTheme.backgroundColor,
-        border: Border.all(color: statusTheme.borderColor),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: statusTheme.badgeBackgroundColor,
-              child: Icon(
-                statusTheme.centerIcon,
-                color: statusTheme.accentColor,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _AttachmentMeta(content: content),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AttachmentMeta extends StatelessWidget {
-  const _AttachmentMeta({required this.content});
-
-  final ChatMediaMessageContent content;
-
-  @override
-  Widget build(BuildContext context) {
-    final statusTheme = _AttachmentVisualState.fromStatus(content.attachmentStatus);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+        const SizedBox(height: 6),
         Text(
           content.fileName,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: const Color(0xFF98A2B3)),
         ),
         const SizedBox(height: 4),
         Text(
-          '${content.mimeType} · ${_formatBytes(content.sizeBytes)}',
-          style: Theme.of(context).textTheme.bodySmall,
+          _attachmentHelperText(content.attachmentStatus),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: theme.color),
         ),
-        const SizedBox(height: 6),
-        _AttachmentStatusChip(status: content.attachmentStatus),
-        if (statusTheme.helperText != null) ...[
-          const SizedBox(height: 6),
-          Text(
-            statusTheme.helperText!,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: statusTheme.accentColor,
-            ),
-          ),
-        ],
       ],
     );
   }
 }
 
-class _AttachmentStatusChip extends StatelessWidget {
-  const _AttachmentStatusChip({required this.status});
+class _AttachmentLine extends StatelessWidget {
+  const _AttachmentLine({
+    required this.icon,
+    required this.label,
+    required this.status,
+    this.subtitle,
+  });
 
+  final IconData icon;
+  final String label;
   final ChatMediaAttachmentStatus status;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
     final theme = _AttachmentVisualState.fromStatus(status);
-    final label = switch (status) {
-      ChatMediaAttachmentStatus.pendingUpload => '待上传',
-      ChatMediaAttachmentStatus.processing => '处理中',
-      ChatMediaAttachmentStatus.ready => '可用',
-      ChatMediaAttachmentStatus.failed => '处理失败',
-    };
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.badgeBackgroundColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: theme.accentColor,
-            fontWeight: FontWeight.w600,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF667085)),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label),
+              if (subtitle != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  subtitle!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF98A2B3),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F4F8),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _attachmentStatusLabel(status),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: theme.color,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _attachmentHelperText(status),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: theme.color),
+              ),
+            ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AttachmentStateBadge extends StatelessWidget {
-  const _AttachmentStateBadge({required this.theme});
-
-  final _AttachmentVisualState theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.badgeBackgroundColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Icon(theme.badgeIcon, size: 16, color: theme.accentColor),
-      ),
+      ],
     );
   }
 }
 
 class _AttachmentVisualState {
-  const _AttachmentVisualState({
-    required this.accentColor,
-    required this.backgroundColor,
-    required this.badgeBackgroundColor,
-    required this.borderColor,
-    required this.centerIcon,
-    required this.badgeIcon,
-    this.helperText,
-  });
+  const _AttachmentVisualState({required this.color, required this.icon});
 
-  final Color accentColor;
-  final Color backgroundColor;
-  final Color badgeBackgroundColor;
-  final Color borderColor;
-  final IconData centerIcon;
-  final IconData badgeIcon;
-  final String? helperText;
+  final Color color;
+  final IconData icon;
 
   static _AttachmentVisualState fromStatus(ChatMediaAttachmentStatus status) {
     switch (status) {
       case ChatMediaAttachmentStatus.pendingUpload:
         return const _AttachmentVisualState(
-          accentColor: Color(0xFF7A5C00),
-          backgroundColor: Color(0xFFFFF8D8),
-          badgeBackgroundColor: Color(0xFFFFF0B3),
-          borderColor: Color(0xFFE7D38A),
-          centerIcon: Icons.schedule_send_outlined,
-          badgeIcon: Icons.schedule_outlined,
-          helperText: '附件还在等待上传完成',
+          color: Color(0xFFC27B00),
+          icon: Icons.schedule_send_outlined,
         );
       case ChatMediaAttachmentStatus.processing:
         return const _AttachmentVisualState(
-          accentColor: Color(0xFF0B63B6),
-          backgroundColor: Color(0xFFE8F2FF),
-          badgeBackgroundColor: Color(0xFFD6E8FF),
-          borderColor: Color(0xFFB7D1F4),
-          centerIcon: Icons.hourglass_top_rounded,
-          badgeIcon: Icons.autorenew_rounded,
-          helperText: '附件处理中，稍后可用',
+          color: Color(0xFF2D8CFF),
+          icon: Icons.image_outlined,
         );
       case ChatMediaAttachmentStatus.ready:
         return const _AttachmentVisualState(
-          accentColor: Color(0xFF1E7A34),
-          backgroundColor: Color(0xFFE9F8EE),
-          badgeBackgroundColor: Color(0xFFD7F0E0),
-          borderColor: Color(0xFFB7DFBF),
-          centerIcon: Icons.task_alt_rounded,
-          badgeIcon: Icons.check_circle,
-          helperText: '附件已处理完成',
+          color: Color(0xFF12B76A),
+          icon: Icons.image_outlined,
         );
       case ChatMediaAttachmentStatus.failed:
         return const _AttachmentVisualState(
-          accentColor: Color(0xFFB3261E),
-          backgroundColor: Color(0xFFFFECE9),
-          badgeBackgroundColor: Color(0xFFFFDAD6),
-          borderColor: Color(0xFFF0B6B0),
-          centerIcon: Icons.error_outline_rounded,
-          badgeIcon: Icons.error,
-          helperText: '附件处理失败，请稍后重试',
+          color: Color(0xFFF04438),
+          icon: Icons.error_outline_rounded,
         );
     }
   }
@@ -444,4 +433,22 @@ String _formatBytes(int value) {
   }
 
   return '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
+String _attachmentStatusLabel(ChatMediaAttachmentStatus status) {
+  return switch (status) {
+    ChatMediaAttachmentStatus.pendingUpload => '待上传',
+    ChatMediaAttachmentStatus.processing => '处理中',
+    ChatMediaAttachmentStatus.ready => '可用',
+    ChatMediaAttachmentStatus.failed => '处理失败',
+  };
+}
+
+String _attachmentHelperText(ChatMediaAttachmentStatus status) {
+  return switch (status) {
+    ChatMediaAttachmentStatus.pendingUpload => '附件还在等待上传完成',
+    ChatMediaAttachmentStatus.processing => '附件处理中，稍后可用',
+    ChatMediaAttachmentStatus.ready => '附件已处理完成',
+    ChatMediaAttachmentStatus.failed => '附件处理失败，请稍后重试',
+  };
 }

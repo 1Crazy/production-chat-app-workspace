@@ -26,6 +26,7 @@ import { ChatGateway } from './chat.gateway';
 
 import type { AppConfigService } from '@app/infra/config/app-config.service';
 import { InMemoryChatModelRepository } from '@app/infra/database/repositories/in-memory-chat-model.repository';
+import type { MetricsRegistryService } from '@app/infra/observability/metrics-registry.service';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthTokenService } from '@app/modules/auth/services/auth-token.service';
 
@@ -101,6 +102,10 @@ class InMemoryRealtimePresenceStore extends RealtimePresenceStore {
   override async listSocketIdsBySessionId(sessionId: string): Promise<string[]> {
     return Array.from(this.socketIdsBySessionId.get(sessionId) ?? []);
   }
+
+  override async countActiveConnections(): Promise<number> {
+    return this.connectionsBySocketId.size;
+  }
 }
 
 class InMemoryRealtimeTypingStore extends RealtimeTypingStore {
@@ -159,6 +164,10 @@ describe('ChatGateway', () => {
         return 'refresh-secret';
       },
     } as unknown as AppConfigService);
+    const metricsRegistryService = {
+      incrementCounter: jest.fn(),
+      setGauge: jest.fn(),
+    } as unknown as MetricsRegistryService;
     const gateway = new ChatGateway(
       authTokenService,
       authRepository,
@@ -166,6 +175,7 @@ describe('ChatGateway', () => {
       realtimePresenceService,
       realtimeSocketAdapterService,
       realtimeTypingService,
+      metricsRegistryService,
     );
     const roomEmitter = jest.fn();
     const roomDisconnect = jest.fn();
@@ -192,6 +202,7 @@ describe('ChatGateway', () => {
       roomEmitter,
       roomDisconnect,
       server,
+      metricsRegistryService,
     };
   }
 

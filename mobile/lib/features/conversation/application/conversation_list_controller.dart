@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:production_chat_app/features/chat/domain/entities/chat_message.dart';
 import 'package:production_chat_app/features/conversation/domain/entities/conversation_summary.dart';
 import 'package:production_chat_app/features/conversation/domain/repositories/conversation_repository.dart';
+import 'package:production_chat_app/shared/network/api_client.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime_event.dart';
 
@@ -66,7 +67,7 @@ class ConversationListController extends ChangeNotifier {
       );
       _publishItemsChanged();
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = formatDisplayError(error);
     } finally {
       _isLoading = false;
       notifyListeners();

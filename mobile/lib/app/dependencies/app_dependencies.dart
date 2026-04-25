@@ -59,6 +59,12 @@ class AppDependencies {
     final notificationRemoteDataSource = NotificationRemoteDataSource(
       apiClient: apiClient,
     );
+    final pushNotificationService = firebaseReady
+        ? FirebasePushNotificationService()
+        : const NoopPushNotificationService();
+    final pushTokenProvider = firebaseReady
+        ? FirebaseMessagingPushTokenProvider()
+        : const NoopPushTokenProvider();
 
     return AppDependencies(
       authRepository: AuthRepositoryImpl(
@@ -78,10 +84,10 @@ class AppDependencies {
       profileRepository: ProfileRepositoryImpl(
         remoteDataSource: ProfileRemoteDataSource(apiClient: apiClient),
       ),
-      pushNotificationService: FirebasePushNotificationService(),
+      pushNotificationService: pushNotificationService,
       pushRegistrationService: PushRegistrationServiceImpl(
         remoteDataSource: notificationRemoteDataSource,
-        pushTokenProvider: FirebaseMessagingPushTokenProvider(),
+        pushTokenProvider: pushTokenProvider,
         keyValueStore: keyValueStore,
       ),
     );

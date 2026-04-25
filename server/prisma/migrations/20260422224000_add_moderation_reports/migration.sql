@@ -1,19 +1,19 @@
 CREATE TABLE "moderation_reports" (
-  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-  "reporter_id" UUID NOT NULL,
+  "id" TEXT NOT NULL,
+  "reporter_id" TEXT NOT NULL,
   "target_type" TEXT NOT NULL,
   "target_id" TEXT NOT NULL,
-  "conversation_id" UUID,
-  "message_id" UUID,
-  "reported_user_id" UUID,
+  "conversation_id" TEXT,
+  "message_id" TEXT,
+  "reported_user_id" TEXT,
   "reason_code" TEXT NOT NULL,
   "description" TEXT,
   "status" TEXT NOT NULL DEFAULT 'pending_review',
   "resolution_note" TEXT,
-  "handled_by_user_id" UUID,
+  "handled_by_user_id" TEXT,
   "handled_at" TIMESTAMP(3),
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "moderation_reports_pkey" PRIMARY KEY ("id")
 );
 

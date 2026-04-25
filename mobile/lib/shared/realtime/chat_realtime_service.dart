@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:production_chat_app/features/chat/domain/entities/chat_message.dart';
+import 'package:production_chat_app/shared/network/api_client.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime_event.dart';
 
@@ -120,11 +121,11 @@ class ChatRealtimeService implements ChatRealtime {
     });
     socket.onConnectError((error) {
       _connectionStateController.add(ChatRealtimeConnectionState.disconnected);
-      _connectionErrorController.add(error.toString());
+      _connectionErrorController.add(formatDisplayError(error));
     });
     socket.onError((error) {
       _connectionStateController.add(ChatRealtimeConnectionState.disconnected);
-      _connectionErrorController.add(error.toString());
+      _connectionErrorController.add(formatDisplayError(error));
     });
     socket.on('connection.ready', (payload) {
       _connectionStateController.add(ChatRealtimeConnectionState.connected);

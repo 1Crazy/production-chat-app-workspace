@@ -13,6 +13,8 @@ import { ProcessReportDto } from '../dto/process-report.dto';
 import { AdminAuditLogRepository } from '../repositories/admin-audit-log.repository';
 
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
+import { AppLoggerService } from '@app/infra/logger/app-logger.service';
+import { MetricsRegistryService } from '@app/infra/observability/metrics-registry.service';
 import { AuthRepository } from '@app/modules/auth/repositories/auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
 import { toModerationReportView, type ModerationReportView } from '@app/modules/moderation/dto/moderation-report.dto';
@@ -27,6 +29,8 @@ export class AdminService {
     private readonly chatModelRepository: ChatModelRepository,
     private readonly authRepository: AuthRepository,
     private readonly authIdentityService: AuthIdentityService,
+    private readonly metricsRegistryService: MetricsRegistryService,
+    private readonly appLoggerService: AppLoggerService,
     private readonly chatGateway: ChatGateway,
   ) {}
 
@@ -187,6 +191,7 @@ export class AdminService {
         status: report.status,
       },
     });
+    this.recordAdminActionMetric('moderation.report.process');
 
     return toModerationReportView(report);
   }
@@ -228,6 +233,7 @@ export class AdminService {
         revokedSessionIds: sessions.map((session) => session.id),
       },
     });
+    this.recordAdminActionMetric('user.ban');
 
     return {
       success: true,
@@ -267,6 +273,7 @@ export class AdminService {
         userId: session.userId,
       },
     });
+    this.recordAdminActionMetric('session.revoke');
 
     return {
       success: true,
@@ -291,5 +298,24 @@ export class AdminService {
     // 当前 AuthRepository 还没有全量用户查询接口，这里先用现有能力返回已存在用户，
     // 后续管理端独立化时再提升为正式分页查询仓储接口。
     return possibleUsers.filter((user) => user != null);
+  }
+
+  private recordAdminActionMetric(action: string): void {
+    this.metricsRegistryService.incrementCounter('chat_admin_actions_total', {
+      help: 'Total number of critical admin actions recorded in audit logs.',
+      labels: {
+        action,
+        result: 'success',
+      },
+    });
+    this.appLoggerService.logWithMetadata(
+      'log',
+      'admin_action_recorded',
+      {
+        action,
+        result: 'success',
+      },
+      'AdminService',
+    );
   }
 }

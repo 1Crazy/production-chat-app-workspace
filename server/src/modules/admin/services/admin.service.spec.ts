@@ -4,6 +4,8 @@ import { AdminAuditLogRepository } from '../repositories/admin-audit-log.reposit
 import { AdminService } from './admin.service';
 
 import { InMemoryChatModelRepository } from '@app/infra/database/repositories/in-memory-chat-model.repository';
+import type { AppLoggerService } from '@app/infra/logger/app-logger.service';
+import type { MetricsRegistryService } from '@app/infra/observability/metrics-registry.service';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
 import type { ModerationReportEntity } from '@app/modules/moderation/entities/moderation-report.entity';
@@ -124,12 +126,20 @@ describe('AdminService', () => {
     const chatGateway = {
       disconnectSession: jest.fn().mockResolvedValue(undefined),
     } as unknown as ChatGateway;
+    const metricsRegistryService = {
+      incrementCounter: jest.fn(),
+    } as unknown as MetricsRegistryService;
+    const appLoggerService = {
+      logWithMetadata: jest.fn(),
+    } as unknown as AppLoggerService;
     const service = new AdminService(
       adminAuditLogRepository,
       moderationReportRepository,
       chatModelRepository,
       authRepository,
       authIdentityService,
+      metricsRegistryService,
+      appLoggerService,
       chatGateway,
     );
 
@@ -137,6 +147,7 @@ describe('AdminService', () => {
       adminAuditLogRepository,
       authRepository,
       chatGateway,
+      metricsRegistryService,
       moderationReportRepository,
       service,
     };

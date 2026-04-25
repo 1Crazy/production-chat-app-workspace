@@ -17,6 +17,7 @@ import { MessageIdempotencyStore } from '../stores/message-idempotency.store';
 import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import type { ConversationEntity } from '@app/infra/database/entities/conversation.entity';
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
+import { MetricsRegistryService } from '@app/infra/observability/metrics-registry.service';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
 import {
   toReadCursorView,
@@ -42,6 +43,7 @@ export class MessagesService {
     private readonly authIdentityService: AuthIdentityService,
     private readonly mediaAttachmentRepository: MediaAttachmentRepository,
     private readonly rateLimitService: RateLimitService,
+    private readonly metricsRegistryService: MetricsRegistryService,
     private readonly notificationsService: NotificationsService,
     private readonly chatGateway: ChatGateway,
   ) {}
@@ -141,6 +143,13 @@ export class MessagesService {
         senderUserId,
         messageId: message.id,
       });
+      this.metricsRegistryService.incrementCounter('chat_message_delivery_total', {
+        help: 'Total number of message send attempts that reached a terminal delivery result.',
+        labels: {
+          result: 'accepted',
+          message_type: dto.type,
+        },
+      });
 
       return {
         ack: 'accepted',
@@ -150,6 +159,13 @@ export class MessagesService {
       if (shouldReleaseReservation) {
         await this.messageIdempotencyStore.release(idempotencyKey);
       }
+      this.metricsRegistryService.incrementCounter('chat_message_delivery_total', {
+        help: 'Total number of message send attempts that reached a terminal delivery result.',
+        labels: {
+          result: 'failed',
+          message_type: dto.type,
+        },
+      });
 
       throw error;
     }

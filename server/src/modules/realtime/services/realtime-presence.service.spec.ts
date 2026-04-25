@@ -77,6 +77,10 @@ class InMemoryRealtimePresenceStore extends RealtimePresenceStore {
     return Array.from(this.socketIdsBySessionId.get(sessionId) ?? []);
   }
 
+  override async countActiveConnections(): Promise<number> {
+    return this.connectionsBySocketId.size;
+  }
+
   private addValue(index: Map<string, Set<string>>, key: string, value: string): void {
     const values = index.get(key) ?? new Set<string>();
     values.add(value);
@@ -131,6 +135,7 @@ describe('RealtimePresenceService', () => {
       activeSessionCount: 2,
     });
     expect(await service.listSocketIdsBySessionId('session-a')).toEqual(['socket-a']);
+    expect(await service.countActiveConnections()).toBe(2);
 
     await service.unregisterConnection('socket-a');
 
@@ -152,5 +157,6 @@ describe('RealtimePresenceService', () => {
     expect((await service.getUserPresence('user-1')).lastSeenAt).toEqual(
       expect.any(String),
     );
+    expect(await service.countActiveConnections()).toBe(0);
   });
 });

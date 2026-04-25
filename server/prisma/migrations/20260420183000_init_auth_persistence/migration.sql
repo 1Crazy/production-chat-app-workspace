@@ -6,7 +6,7 @@ CREATE TABLE "users" (
   "avatar_url" TEXT,
   "discovery_mode" TEXT NOT NULL DEFAULT 'public',
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
   "disabled_at" TIMESTAMP(3),
 
   CONSTRAINT "users_pkey" PRIMARY KEY ("id")

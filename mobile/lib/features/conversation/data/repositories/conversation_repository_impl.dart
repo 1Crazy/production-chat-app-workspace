@@ -51,4 +51,17 @@ class ConversationRepositoryImpl implements ConversationRepository {
       targetHandle: targetHandle,
     );
   }
+
+  @override
+  Future<String> createGroupConversation({
+    required String accessToken,
+    required String title,
+    required List<String> memberHandles,
+  }) {
+    return _remoteDataSource.createGroupConversation(
+      accessToken: accessToken,
+      title: title,
+      memberHandles: memberHandles,
+    );
+  }
 }

@@ -6,7 +6,7 @@ CREATE TABLE "push_registrations" (
   "token" TEXT NOT NULL,
   "push_environment" TEXT NOT NULL,
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
   "last_registered_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "revoked_at" TIMESTAMP(3),
 

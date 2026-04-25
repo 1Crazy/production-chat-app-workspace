@@ -9,6 +9,7 @@ import {
 } from './push-delivery.provider';
 
 import { InMemoryChatModelRepository } from '@app/infra/database/repositories/in-memory-chat-model.repository';
+import type { MetricsRegistryService } from '@app/infra/observability/metrics-registry.service';
 import type { DeviceSessionEntity } from '@app/modules/auth/entities/device-session.entity';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
@@ -116,6 +117,9 @@ describe('NotificationsService', () => {
         lastSeenAt: null,
       }),
     } as unknown as RealtimePresenceService;
+    const metricsRegistryService = {
+      incrementCounter: jest.fn(),
+    } as unknown as MetricsRegistryService;
     const pushDeliveryProvider = new RecordingPushDeliveryProvider();
     const service = new NotificationsService(
       pushRegistrationRepository,
@@ -123,6 +127,7 @@ describe('NotificationsService', () => {
       authIdentityService,
       chatModelRepository,
       realtimePresenceService,
+      metricsRegistryService,
       pushDeliveryProvider,
     );
     const session: DeviceSessionEntity = {
@@ -141,6 +146,7 @@ describe('NotificationsService', () => {
       pushDeliveryProvider,
       pushRegistrationRepository,
       realtimePresenceService,
+      metricsRegistryService,
       service,
       session,
     };

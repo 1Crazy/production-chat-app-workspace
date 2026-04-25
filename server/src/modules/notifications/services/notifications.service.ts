@@ -15,6 +15,7 @@ import {
 } from './push-delivery.provider';
 
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
+import { MetricsRegistryService } from '@app/infra/observability/metrics-registry.service';
 import type { DeviceSessionEntity } from '@app/modules/auth/entities/device-session.entity';
 import { AuthRepository } from '@app/modules/auth/repositories/auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
@@ -37,6 +38,7 @@ export class NotificationsService {
     private readonly authIdentityService: AuthIdentityService,
     private readonly chatModelRepository: ChatModelRepository,
     private readonly realtimePresenceService: RealtimePresenceService,
+    private readonly metricsRegistryService: MetricsRegistryService,
     private readonly pushDeliveryProvider: PushDeliveryProvider = new LoggingPushDeliveryProvider(),
   ) {}
 
@@ -131,6 +133,13 @@ export class NotificationsService {
 
       // 有实时连接就依赖 websocket 送达，避免前台在线设备同时收到重复系统推送。
       if (presence.activeConnectionCount > 0) {
+        this.metricsRegistryService.incrementCounter('chat_push_delivery_total', {
+          help: 'Total push delivery attempts partitioned by provider and result.',
+          labels: {
+            provider: 'realtime',
+            result: 'skipped_online',
+          },
+        });
         continue;
       }
 
@@ -140,6 +149,13 @@ export class NotificationsService {
         );
 
       if (registrations.length === 0) {
+        this.metricsRegistryService.incrementCounter('chat_push_delivery_total', {
+          help: 'Total push delivery attempts partitioned by provider and result.',
+          labels: {
+            provider: 'unregistered',
+            result: 'skipped_missing_registration',
+          },
+        });
         continue;
       }
 
@@ -160,6 +176,13 @@ export class NotificationsService {
         );
 
         if (session == null || session.userId !== recipientUserId) {
+          this.metricsRegistryService.incrementCounter('chat_push_delivery_total', {
+            help: 'Total push delivery attempts partitioned by provider and result.',
+            labels: {
+              provider: registration.provider,
+              result: 'skipped_session_invalid',
+            },
+          });
           continue;
         }
 
@@ -167,25 +190,43 @@ export class NotificationsService {
           ? '你收到一条新消息'
           : preview;
 
-        await this.pushDeliveryProvider.send({
-          registration,
-          title,
-          body,
-          badgeCount,
-          data: {
-            badgeCount: String(badgeCount),
-            conversationId: params.conversationId,
-            messageId: message.id,
-            senderId: sender.id,
-            senderName: sender.nickname,
-            sequence: String(conversation.latestSequence),
-            unreadCount: String(unreadCount),
-            privacyModeEnabled: String(registration.privacyModeEnabled),
-            messagePreview: registration.privacyModeEnabled ? '' : preview,
+        try {
+          await this.pushDeliveryProvider.send({
+            registration,
             title,
             body,
-          },
-        });
+            badgeCount,
+            data: {
+              badgeCount: String(badgeCount),
+              conversationId: params.conversationId,
+              messageId: message.id,
+              senderId: sender.id,
+              senderName: sender.nickname,
+              sequence: String(conversation.latestSequence),
+              unreadCount: String(unreadCount),
+              privacyModeEnabled: String(registration.privacyModeEnabled),
+              messagePreview: registration.privacyModeEnabled ? '' : preview,
+              title,
+              body,
+            },
+          });
+          this.metricsRegistryService.incrementCounter('chat_push_delivery_total', {
+            help: 'Total push delivery attempts partitioned by provider and result.',
+            labels: {
+              provider: registration.provider,
+              result: 'sent',
+            },
+          });
+        } catch (error) {
+          this.metricsRegistryService.incrementCounter('chat_push_delivery_total', {
+            help: 'Total push delivery attempts partitioned by provider and result.',
+            labels: {
+              provider: registration.provider,
+              result: 'failed',
+            },
+          });
+          throw error;
+        }
       }
     }
   }
@@ -194,6 +235,12 @@ export class NotificationsService {
     userId: string,
     dto: SyncNotificationStateDto,
   ): Promise<NotificationSyncStateDto> {
+    this.metricsRegistryService.incrementCounter('chat_notification_sync_total', {
+      help: 'Total number of notification sync requests handled by the server.',
+      labels: {
+        source: dto.pushMessageId?.trim() ? 'push_wakeup' : 'manual',
+      },
+    });
     await this.authIdentityService.getActiveUserById(userId);
     const conversationIds =
       await this.chatModelRepository.listConversationIdsForUser(userId);

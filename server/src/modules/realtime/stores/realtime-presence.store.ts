@@ -28,4 +28,6 @@ export abstract class RealtimePresenceStore {
   abstract listUserPresence(userIds: string[]): Promise<UserPresenceView[]>;
 
   abstract listSocketIdsBySessionId(sessionId: string): Promise<string[]>;
+
+  abstract countActiveConnections(): Promise<number>;
 }

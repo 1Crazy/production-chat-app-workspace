@@ -113,6 +113,31 @@ abstract class PushNotificationService {
   void dispose();
 }
 
+class NoopPushNotificationService implements PushNotificationService {
+  const NoopPushNotificationService();
+
+  @override
+  Stream<PushNotificationForegroundEvent> get foregroundMessageStream {
+    return const Stream<PushNotificationForegroundEvent>.empty();
+  }
+
+  @override
+  Stream<PushNotificationIntent> get notificationTapStream {
+    return const Stream<PushNotificationIntent>.empty();
+  }
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  PushNotificationIntent? takeInitialNotificationIntent() {
+    return null;
+  }
+
+  @override
+  void dispose() {}
+}
+
 class FirebasePushNotificationService implements PushNotificationService {
   FirebasePushNotificationService({FirebaseMessaging? messaging})
     : _messaging = messaging ?? FirebaseMessaging.instance;

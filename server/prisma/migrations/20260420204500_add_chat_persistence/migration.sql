@@ -6,7 +6,7 @@ CREATE TABLE "conversations" (
   "direct_key" TEXT,
   "latest_sequence" INTEGER NOT NULL DEFAULT 0,
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
 
   CONSTRAINT "conversations_pkey" PRIMARY KEY ("id")
 );
@@ -31,7 +31,7 @@ CREATE TABLE "messages" (
   "sequence" INTEGER NOT NULL,
   "content" JSONB NOT NULL,
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
 
   CONSTRAINT "messages_pkey" PRIMARY KEY ("id")
 );
@@ -41,7 +41,7 @@ CREATE TABLE "read_cursors" (
   "conversation_id" TEXT NOT NULL,
   "user_id" TEXT NOT NULL,
   "last_read_sequence" INTEGER NOT NULL DEFAULT 0,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
 
   CONSTRAINT "read_cursors_pkey" PRIMARY KEY ("id")
 );

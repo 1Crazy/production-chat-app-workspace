@@ -78,7 +78,7 @@ class ChatReadCursorUpdatedEvent {
       userId: readCursor['userId'] as String,
       lastReadSequence: readCursor['lastReadSequence'] as int,
       unreadCount: readCursor['unreadCount'] as int,
-      updatedAt: DateTime.parse(readCursor['updatedAt'] as String),
+      updatedAt: DateTime.parse(readCursor['updatedAt'] as String).toLocal(),
     );
   }
 
@@ -104,7 +104,7 @@ class ChatTypingUpdatedEvent {
       isTyping: json['isTyping'] as bool? ?? false,
       expiresAt: json['expiresAt'] == null
           ? null
-          : DateTime.parse(json['expiresAt'] as String),
+          : DateTime.parse(json['expiresAt'] as String).toLocal(),
     );
   }
 

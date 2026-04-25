@@ -20,6 +20,6 @@ import { AuthModule } from '@app/modules/auth/auth.module';
       useExisting: PrismaModerationReportRepository,
     },
   ],
-  exports: [ModerationService],
+  exports: [ModerationService, ModerationReportRepository],
 })
 export class ModerationModule {}

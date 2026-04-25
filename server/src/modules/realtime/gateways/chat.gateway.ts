@@ -43,6 +43,7 @@ import type {
 } from '../types/authenticated-socket.type';
 
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
+import { MetricsRegistryService } from '@app/infra/observability/metrics-registry.service';
 import {
   toAuthUserView,
   toDeviceSessionView,
@@ -83,6 +84,7 @@ export class ChatGateway
     private readonly realtimePresenceService: RealtimePresenceService,
     private readonly realtimeSocketAdapterService: RealtimeSocketAdapterService,
     private readonly realtimeTypingService: RealtimeTypingService,
+    private readonly metricsRegistryService: MetricsRegistryService,
   ) {}
 
   afterInit(server: GatewayServer): void {
@@ -120,6 +122,13 @@ export class ChatGateway
           return client.join(buildConversationRoom(conversationId));
         }),
       );
+      await this.recordRealtimeConnectionGauge();
+      this.metricsRegistryService.incrementCounter('chat_realtime_connections_total', {
+        help: 'Total number of accepted realtime socket connections.',
+        labels: {
+          result: 'accepted',
+        },
+      });
 
       authenticatedClient.emit(
         REALTIME_EVENTS.connectionReady,
@@ -134,6 +143,12 @@ export class ChatGateway
       this.emitConnectionError(client, {
         code: error instanceof UnauthorizedException ? 'UNAUTHORIZED' : 'UNKNOWN',
         message,
+      });
+      this.metricsRegistryService.incrementCounter('chat_realtime_connections_total', {
+        help: 'Total number of realtime socket connection attempts.',
+        labels: {
+          result: 'rejected',
+        },
       });
       this.logger.warn(`Rejecting realtime socket ${client.id}: ${message}`);
       client.disconnect(true);
@@ -150,6 +165,13 @@ export class ChatGateway
       return;
     }
 
+    await this.recordRealtimeConnectionGauge();
+    this.metricsRegistryService.incrementCounter('chat_realtime_disconnects_total', {
+      help: 'Total number of realtime socket disconnect events.',
+      labels: {
+        reason: 'client_disconnect',
+      },
+    });
     await this.broadcastPresenceUpdate(connection.userId, connection.conversationIds);
   }
 
@@ -442,5 +464,12 @@ export class ChatGateway
     if (!touched) {
       this.stopPresenceHeartbeat(socketId);
     }
+  }
+
+  private async recordRealtimeConnectionGauge(): Promise<void> {
+    this.metricsRegistryService.setGauge('chat_realtime_active_connections', {
+      help: 'Current number of active realtime socket connections.',
+      value: await this.realtimePresenceService.countActiveConnections(),
+    });
   }
 }

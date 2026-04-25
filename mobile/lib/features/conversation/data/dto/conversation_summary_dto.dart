@@ -22,10 +22,10 @@ class ConversationSummaryDto {
       lastMessagePreview: json['lastMessagePreview'] as String,
       latestSequence: json['latestSequence'] as int,
       unreadCount: json['unreadCount'] as int,
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      updatedAt: _parseToLocal(json['updatedAt'] as String),
       lastMessageAt: json['lastMessageAt'] == null
           ? null
-          : DateTime.parse(json['lastMessageAt'] as String),
+          : _parseToLocal(json['lastMessageAt'] as String),
     );
   }
 
@@ -44,7 +44,7 @@ class ConversationSummaryDto {
       lastMessagePreview: '',
       latestSequence: json['latestSequence'] as int? ?? 0,
       unreadCount: 0,
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      updatedAt: _parseToLocal(json['updatedAt'] as String),
       lastMessageAt: null,
     );
   }
@@ -71,5 +71,9 @@ class ConversationSummaryDto {
       updatedAt: updatedAt,
       lastMessageAt: lastMessageAt,
     );
+  }
+
+  static DateTime _parseToLocal(String rawValue) {
+    return DateTime.parse(rawValue).toLocal();
   }
 }

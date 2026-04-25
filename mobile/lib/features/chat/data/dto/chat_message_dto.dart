@@ -28,8 +28,8 @@ class ChatMessageDto {
       messageKind: messageKind,
       sequence: json['sequence'] as int,
       content: _contentFromJson(messageKind: messageKind, json: content),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      createdAt: _parseToLocal(json['createdAt'] as String),
+      updatedAt: _parseToLocal(json['updatedAt'] as String),
     );
   }
 
@@ -125,5 +125,9 @@ class ChatMessageDto {
       default:
         return ChatMediaAttachmentStatus.ready;
     }
+  }
+
+  static DateTime _parseToLocal(String rawValue) {
+    return DateTime.parse(rawValue).toLocal();
   }
 }

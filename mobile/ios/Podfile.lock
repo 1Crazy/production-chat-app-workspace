@@ -1,14 +1,14 @@
 PODS:
-  - Firebase/CoreOnly (12.12.1):
-    - FirebaseCore (~> 12.12.1)
-  - Firebase/Messaging (12.12.1):
+  - Firebase/CoreOnly (12.12.0):
+    - FirebaseCore (~> 12.12.0)
+  - Firebase/Messaging (12.12.0):
     - Firebase/CoreOnly
     - FirebaseMessaging (~> 12.12.0)
   - firebase_core (4.7.0):
-    - Firebase/CoreOnly (= 12.12.1)
+    - Firebase/CoreOnly (= 12.12.0)
     - Flutter
   - firebase_messaging (16.2.0):
-    - Firebase/Messaging (= 12.12.1)
+    - Firebase/Messaging (= 12.12.0)
     - firebase_core
     - Flutter
   - FirebaseCore (12.12.1):
@@ -72,40 +72,29 @@ PODS:
     - FlutterMacOS
 
 DEPENDENCIES:
-  - Firebase/CoreOnly (from `/tmp/firebase-ios-sdk-CocoaPods-12.12.1`)
-  - Firebase/Messaging (from `/tmp/firebase-ios-sdk-CocoaPods-12.12.1`)
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
   - firebase_messaging (from `.symlinks/plugins/firebase_messaging/ios`)
-  - FirebaseCore (from `/tmp/firebase-ios-sdk-CocoaPods-12.12.1`)
-  - FirebaseCoreInternal (from `/tmp/firebase-ios-sdk-CocoaPods-12.12.1`)
-  - FirebaseInstallations (from `/tmp/firebase-ios-sdk-CocoaPods-12.12.1`)
-  - FirebaseMessaging (from `/tmp/firebase-ios-sdk-CocoaPods-12.12.1`)
   - Flutter (from `Flutter`)
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
 
 SPEC REPOS:
   trunk:
+    - Firebase
+    - FirebaseCore
+    - FirebaseCoreInternal
+    - FirebaseInstallations
+    - FirebaseMessaging
     - GoogleDataTransport
     - GoogleUtilities
     - nanopb
     - PromisesObjC
 
 EXTERNAL SOURCES:
-  Firebase:
-    :path: "/tmp/firebase-ios-sdk-CocoaPods-12.12.1"
   firebase_core:
     :path: ".symlinks/plugins/firebase_core/ios"
   firebase_messaging:
     :path: ".symlinks/plugins/firebase_messaging/ios"
-  FirebaseCore:
-    :path: "/tmp/firebase-ios-sdk-CocoaPods-12.12.1"
-  FirebaseCoreInternal:
-    :path: "/tmp/firebase-ios-sdk-CocoaPods-12.12.1"
-  FirebaseInstallations:
-    :path: "/tmp/firebase-ios-sdk-CocoaPods-12.12.1"
-  FirebaseMessaging:
-    :path: "/tmp/firebase-ios-sdk-CocoaPods-12.12.1"
   Flutter:
     :path: Flutter
   flutter_local_notifications:
@@ -114,13 +103,13 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
 
 SPEC CHECKSUMS:
-  Firebase: c904d1359de699e0923df6e0bc27471f96a52a9e
-  firebase_core: 6fff6fa5b0d51e62d31a4a66d8641d433e51cb2d
-  firebase_messaging: b29e88877968a85804c1a6465c76dd1f03fbe046
-  FirebaseCore: 520dbc5df78af3f2081a571eb6a7ba46be0d3559
+  Firebase: aa154fee4e9b8eac17aa42344988865b3e857d33
+  firebase_core: 9156a152117c843440b0b990c785aa0259bc5447
+  firebase_messaging: 0d962ab44ff24ed36deb8fa2ee043c4671858269
+  FirebaseCore: 86241206e656f5c80c995e370e6c975913b9b284
   FirebaseCoreInternal: 7c12fc3011d889085e765e317d7b9fd1cef97af9
-  FirebaseInstallations: e23b13fc0f33b8b54ea3a664aa39045ba1ebf48d
-  FirebaseMessaging: 6d212ba8b23531b452749bd2751d9cfcd950f6ee
+  FirebaseInstallations: 4e6e162aa4abaaeeeb01dd00179dfc5ad9c2194e
+  FirebaseMessaging: 341004946fa7ffc741344b20f1b667514fc93e31
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_local_notifications: 643a3eda1ce1c0599413ca31672536d423dee214
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7

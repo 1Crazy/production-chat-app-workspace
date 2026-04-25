@@ -150,6 +150,11 @@ export class RedisRealtimePresenceStore extends RealtimePresenceStore {
     return activeSocketIds;
   }
 
+  override async countActiveConnections(): Promise<number> {
+    const keys = await this.redisService.instance.keys('chat:presence:socket:*');
+    return keys.length;
+  }
+
   private toConnection(rawConnection: Record<string, string>): ActiveRealtimeConnection {
     return {
       socketId: rawConnection.socketId ?? '',

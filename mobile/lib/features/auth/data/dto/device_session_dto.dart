@@ -13,8 +13,8 @@ class DeviceSessionDto {
     return DeviceSessionDto(
       id: json['id']?.toString() ?? '',
       deviceName: json['deviceName']?.toString() ?? 'unknown-device',
-      createdAt: DateTime.parse(json['createdAt']?.toString() ?? ''),
-      lastSeenAt: DateTime.parse(json['lastSeenAt']?.toString() ?? ''),
+      createdAt: _parseToLocal(json['createdAt']?.toString() ?? ''),
+      lastSeenAt: _parseToLocal(json['lastSeenAt']?.toString() ?? ''),
       isCurrent: json['isCurrent'] as bool? ?? false,
     );
   }
@@ -53,5 +53,9 @@ class DeviceSessionDto {
       lastSeenAt: entity.lastSeenAt,
       isCurrent: entity.isCurrent,
     );
+  }
+
+  static DateTime _parseToLocal(String rawValue) {
+    return DateTime.parse(rawValue).toLocal();
   }
 }

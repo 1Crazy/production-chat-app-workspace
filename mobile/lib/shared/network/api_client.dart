@@ -101,14 +101,122 @@ class ApiClient {
     final decoded = jsonDecode(rawBody);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final message = decoded is Map<String, dynamic>
-          ? decoded['message']?.toString() ?? '请求失败'
-          : '请求失败';
-      throw ApiClientException(message, response.statusCode);
+      final rawMessage = _extractServerMessage(decoded);
+      throw ApiClientException(
+        _friendlyApiMessage(response.statusCode, rawMessage),
+        response.statusCode,
+      );
     }
 
     return decoded;
   }
+}
+
+String _extractServerMessage(dynamic decoded) {
+  if (decoded is Map<String, dynamic>) {
+    final message = decoded['message'];
+
+    if (message is List) {
+      final translated = message
+          .map((item) => _translateValidationMessage(item.toString()))
+          .where((item) => item.trim().isNotEmpty)
+          .toList(growable: false);
+
+      if (translated.isNotEmpty) {
+        return translated.join('；');
+      }
+    }
+
+    if (message != null) {
+      return _translateValidationMessage(message.toString());
+    }
+  }
+
+  return '请求失败';
+}
+
+String formatDisplayError(Object error, {String fallback = '操作失败，请稍后再试'}) {
+  if (error is ApiClientException) {
+    return error.message;
+  }
+
+  if (error is FormatException) {
+    return error.message.isEmpty ? fallback : error.message;
+  }
+
+  final raw = error.toString().trim();
+
+  if (raw.isEmpty) {
+    return fallback;
+  }
+
+  for (final prefix in ['Exception: ', 'Error: ']) {
+    if (raw.startsWith(prefix)) {
+      final cleaned = raw.substring(prefix.length).trim();
+      return cleaned.isEmpty ? fallback : cleaned;
+    }
+  }
+
+  return raw;
+}
+
+String _friendlyApiMessage(int statusCode, String message) {
+  if (statusCode == 429) {
+    switch (message) {
+      case '登录尝试过于频繁，请稍后再试':
+        return '登录尝试过于频繁，请 10 分钟后再试';
+      case '注册尝试过于频繁，请稍后再试':
+        return '注册尝试过于频繁，请 10 分钟后再试';
+      case '验证码请求过于频繁，请稍后再试':
+        return '验证码请求过于频繁，请 10 分钟后再试';
+    }
+  }
+
+  return message;
+}
+
+String _translateValidationMessage(String rawMessage) {
+  final message = rawMessage.trim();
+
+  const exactMappings = {
+    'identifier must be a string': '账号格式不正确',
+    'code must be a string': '验证码格式不正确',
+    'deviceName must be a string': '本机名称格式不正确',
+    'nickname must be a string': '昵称格式不正确',
+  };
+
+  if (exactMappings.containsKey(message)) {
+    return exactMappings[message]!;
+  }
+
+  final regexMappings = <RegExp, String>{
+    RegExp(r'^identifier must match .+ regular expression$'):
+        '账号格式不正确，请输入 3 到 64 位字母、数字或常见符号',
+    RegExp(r'^identifier must be longer than or equal to 3 characters$'):
+        '账号至少需要 3 个字符',
+    RegExp(r'^identifier must be shorter than or equal to 64 characters$'):
+        '账号最多支持 64 个字符',
+    RegExp(r'^code must be longer than or equal to 4 characters$'):
+        '验证码至少需要 4 位',
+    RegExp(r'^code must be shorter than or equal to 8 characters$'):
+        '验证码最多支持 8 位',
+    RegExp(r'^deviceName must be longer than or equal to 2 characters$'):
+        '本机名称至少需要 2 个字符',
+    RegExp(r'^deviceName must be shorter than or equal to 48 characters$'):
+        '本机名称最多支持 48 个字符',
+    RegExp(r'^nickname must be longer than or equal to 2 characters$'):
+        '昵称至少需要 2 个字符',
+    RegExp(r'^nickname must be shorter than or equal to 32 characters$'):
+        '昵称最多支持 32 个字符',
+  };
+
+  for (final entry in regexMappings.entries) {
+    if (entry.key.hasMatch(message)) {
+      return entry.value;
+    }
+  }
+
+  return message;
 }
 
 class ApiClientException implements Exception {
@@ -119,6 +227,6 @@ class ApiClientException implements Exception {
 
   @override
   String toString() {
-    return 'ApiClientException(statusCode: $statusCode, message: $message)';
+    return message;
   }
 }

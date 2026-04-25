@@ -6,6 +6,7 @@ import 'package:production_chat_app/features/auth/domain/entities/auth_code_rece
 import 'package:production_chat_app/features/auth/domain/entities/auth_session.dart';
 import 'package:production_chat_app/features/auth/domain/entities/device_session.dart';
 import 'package:production_chat_app/features/auth/domain/repositories/auth_repository.dart';
+import 'package:production_chat_app/shared/network/api_client.dart';
 import 'package:production_chat_app/shared/notifications/push_registration_service.dart';
 
 class AuthController extends ChangeNotifier {
@@ -72,7 +73,7 @@ class AuthController extends ChangeNotifier {
     required String identifier,
     required String code,
     required String nickname,
-    required String deviceName,
+    String? deviceName,
   }) async {
     await _runBusy(() async {
       _errorMessage = null;
@@ -91,7 +92,7 @@ class AuthController extends ChangeNotifier {
   Future<void> login({
     required String identifier,
     required String code,
-    required String deviceName,
+    String? deviceName,
   }) async {
     await _runBusy(() async {
       _errorMessage = null;
@@ -126,7 +127,7 @@ class AuthController extends ChangeNotifier {
       await _syncPushRegistration();
       await loadDeviceSessions(silent: true);
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = formatDisplayError(error);
 
       if (silent) {
         rethrow;
@@ -157,7 +158,7 @@ class AuthController extends ChangeNotifier {
       );
     } catch (error) {
       if (!silent) {
-        _errorMessage = error.toString();
+        _errorMessage = formatDisplayError(error);
       }
     } finally {
       if (!silent) {
@@ -216,7 +217,7 @@ class AuthController extends ChangeNotifier {
     try {
       await action();
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = formatDisplayError(error);
     } finally {
       _isBusy = false;
       notifyListeners();

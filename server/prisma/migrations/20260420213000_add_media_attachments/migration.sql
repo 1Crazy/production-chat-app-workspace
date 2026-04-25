@@ -14,7 +14,7 @@ CREATE TABLE "media_attachments" (
   "uploaded_at" TIMESTAMP(3),
   "confirmed_at" TIMESTAMP(3),
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
 
   CONSTRAINT "media_attachments_pkey" PRIMARY KEY ("id")
 );

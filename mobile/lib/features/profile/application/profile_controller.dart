@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:production_chat_app/features/profile/domain/entities/discoverable_user.dart';
 import 'package:production_chat_app/features/profile/domain/entities/user_profile.dart';
 import 'package:production_chat_app/features/profile/domain/repositories/profile_repository.dart';
+import 'package:production_chat_app/shared/network/api_client.dart';
 
 class ProfileController extends ChangeNotifier {
   ProfileController({required ProfileRepository profileRepository})
@@ -63,7 +64,7 @@ class ProfileController extends ChangeNotifier {
     try {
       await action();
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = formatDisplayError(error);
     } finally {
       _isBusy = false;
       notifyListeners();

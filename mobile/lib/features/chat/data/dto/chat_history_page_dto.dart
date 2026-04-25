@@ -66,7 +66,7 @@ class ChatHistoryPageDto {
       peerReadSequenceByUserId[userId] = cursor['lastReadSequence'] as int;
       peerReadUpdatedAtByUserId[userId] = DateTime.parse(
         cursor['updatedAt'] as String,
-      );
+      ).toLocal();
     }
 
     return ChatHistoryPage(

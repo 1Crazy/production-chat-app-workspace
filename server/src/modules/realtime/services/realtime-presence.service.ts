@@ -48,4 +48,8 @@ export class RealtimePresenceService {
   async listSocketIdsBySessionId(sessionId: string): Promise<string[]> {
     return this.realtimePresenceStore.listSocketIdsBySessionId(sessionId);
   }
+
+  async countActiveConnections(): Promise<number> {
+    return this.realtimePresenceStore.countActiveConnections();
+  }
 }

@@ -26,7 +26,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String code,
     required String nickname,
-    required String deviceName,
+    String? deviceName,
   }) async {
     final dto = await _remoteDataSource.register(
       identifier: identifier,
@@ -42,7 +42,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<AuthSession> login({
     required String identifier,
     required String code,
-    required String deviceName,
+    String? deviceName,
   }) async {
     final dto = await _remoteDataSource.login(
       identifier: identifier,

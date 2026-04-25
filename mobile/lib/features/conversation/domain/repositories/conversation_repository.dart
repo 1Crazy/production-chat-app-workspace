@@ -12,4 +12,10 @@ abstract class ConversationRepository {
     required String accessToken,
     required String targetHandle,
   });
+
+  Future<String> createGroupConversation({
+    required String accessToken,
+    required String title,
+    required List<String> memberHandles,
+  });
 }

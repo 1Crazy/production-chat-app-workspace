@@ -8,6 +8,7 @@ import 'package:production_chat_app/features/chat/domain/entities/chat_read_rece
 import 'package:production_chat_app/features/chat/domain/entities/chat_sync_result.dart';
 import 'package:production_chat_app/features/chat/domain/repositories/chat_repository.dart';
 import 'package:production_chat_app/features/conversation/domain/entities/conversation_summary.dart';
+import 'package:production_chat_app/shared/network/api_client.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime_event.dart';
 
@@ -110,7 +111,7 @@ class ChatController extends ChangeNotifier {
       _applyHistoryPage(page);
       await _markConversationAsRead();
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = formatDisplayError(error);
     } finally {
       _isInitialLoading = false;
       notifyListeners();
@@ -138,7 +139,7 @@ class ChatController extends ChangeNotifier {
 
       _applyHistoryPage(page);
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = formatDisplayError(error);
     } finally {
       _isLoadingOlder = false;
       notifyListeners();
@@ -173,7 +174,7 @@ class ChatController extends ChangeNotifier {
 
       await _markConversationAsRead();
     } catch (error) {
-      _errorMessage = error.toString();
+      _errorMessage = formatDisplayError(error);
     } finally {
       _isRefreshing = false;
       notifyListeners();
@@ -226,11 +227,11 @@ class ChatController extends ChangeNotifier {
 
             return message.copyWith(
               deliveryState: ChatMessageDeliveryState.failed,
-              failureReason: error.toString(),
+              failureReason: formatDisplayError(error),
             );
           })
           .toList(growable: false);
-      _errorMessage = error.toString();
+      _errorMessage = formatDisplayError(error);
     } finally {
       _isSending = false;
       notifyListeners();
@@ -287,11 +288,11 @@ class ChatController extends ChangeNotifier {
 
             return message.copyWith(
               deliveryState: ChatMessageDeliveryState.failed,
-              failureReason: error.toString(),
+              failureReason: formatDisplayError(error),
             );
           })
           .toList(growable: false);
-      _errorMessage = error.toString();
+      _errorMessage = formatDisplayError(error);
     } finally {
       _isSending = false;
       notifyListeners();
@@ -500,12 +501,9 @@ class ChatController extends ChangeNotifier {
   }
 
   String? readReceiptCaptionFor(ChatMessage message) {
-    final conversation = _activeConversation;
     final sequence = message.sequence;
 
-    if (conversation == null ||
-        message.senderId != _currentUserId ||
-        sequence == null) {
+    if (message.senderId != _currentUserId || sequence == null) {
       return null;
     }
 
@@ -519,21 +517,7 @@ class ChatController extends ChangeNotifier {
       return null;
     }
 
-    if (conversation.memberCount <= 2) {
-      return '对方已读';
-    }
-
-    final readUserNames = _peerReadSequenceByUserId.entries
-        .where((entry) => entry.value >= sequence)
-        .map((entry) => _memberDisplayNameByUserId[entry.key] ?? '成员')
-        .toList(growable: false);
-
-    if (readUserNames.length <= 2) {
-      return '${readUserNames.join('、')} 已读';
-    }
-
-    final previewNames = readUserNames.take(2).join('、');
-    return '$previewNames 等 $readUserCount 人已读';
+    return '已读';
   }
 
   List<String> readReceiptMembersFor(ChatMessage message) {
@@ -600,6 +584,33 @@ class ChatController extends ChangeNotifier {
     });
 
     return members;
+  }
+
+  ChatReadReceiptMember? memberForMessage(ChatMessage message) {
+    final senderId = message.senderId;
+    final displayName =
+        _memberDisplayNameByUserId[senderId] ?? message.senderName;
+    final handle = _memberHandleByUserId[senderId] ?? senderId;
+
+    if (displayName.isEmpty || handle.isEmpty) {
+      return null;
+    }
+
+    final lastReadSequence = _peerReadSequenceByUserId[senderId];
+    final sequence = message.sequence;
+    final hasRead =
+        sequence != null &&
+        lastReadSequence != null &&
+        lastReadSequence >= sequence;
+
+    return ChatReadReceiptMember(
+      userId: senderId,
+      displayName: displayName,
+      handle: handle,
+      hasRead: hasRead,
+      avatarUrl: _memberAvatarUrlByUserId[senderId],
+      readAt: hasRead ? _peerReadUpdatedAtByUserId[senderId] : null,
+    );
   }
 
   void _handleTypingUpdated(ChatTypingUpdatedEvent event) {

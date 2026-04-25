@@ -22,7 +22,7 @@ class AuthRemoteDataSource {
     required String identifier,
     required String code,
     required String nickname,
-    required String deviceName,
+    String? deviceName,
   }) async {
     final response = await _apiClient.postJson(
       '/auth/register',
@@ -30,7 +30,8 @@ class AuthRemoteDataSource {
         'identifier': identifier,
         'code': code,
         'nickname': nickname,
-        'deviceName': deviceName,
+        if (deviceName != null && deviceName.trim().isNotEmpty)
+          'deviceName': deviceName,
       },
     );
 
@@ -40,11 +41,16 @@ class AuthRemoteDataSource {
   Future<AuthBundleDto> login({
     required String identifier,
     required String code,
-    required String deviceName,
+    String? deviceName,
   }) async {
     final response = await _apiClient.postJson(
       '/auth/login',
-      body: {'identifier': identifier, 'code': code, 'deviceName': deviceName},
+      body: {
+        'identifier': identifier,
+        'code': code,
+        if (deviceName != null && deviceName.trim().isNotEmpty)
+          'deviceName': deviceName,
+      },
     );
 
     return AuthBundleDto.fromJson(response);

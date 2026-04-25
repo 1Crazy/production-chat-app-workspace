@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-55432}:5432"
     volumes:
       - postgres_local_data:/var/lib/postgresql/data
       - ./postgres/local-init/01-create-app-databases.sql:/docker-entrypoint-initdb.d/01-create-app-databases.sql:ro

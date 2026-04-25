@@ -4,6 +4,7 @@ import { MessagesService } from './messages.service';
 
 import type { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { InMemoryChatModelRepository } from '@app/infra/database/repositories/in-memory-chat-model.repository';
+import type { MetricsRegistryService } from '@app/infra/observability/metrics-registry.service';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
 import type { MediaAttachmentEntity } from '@app/modules/media/entities/media-attachment.entity';
@@ -130,6 +131,9 @@ describe('MessagesService', () => {
     const rateLimitService = {
       consumeOrThrow: jest.fn().mockResolvedValue(undefined),
     } as unknown as RateLimitService;
+    const metricsRegistryService = {
+      incrementCounter: jest.fn(),
+    } as unknown as MetricsRegistryService;
     const notificationsService = {
       dispatchOfflineMessagePush: jest.fn().mockResolvedValue(undefined),
     } as unknown as NotificationsService;
@@ -142,6 +146,7 @@ describe('MessagesService', () => {
       authIdentityService,
       mediaAttachmentRepository,
       rateLimitService,
+      metricsRegistryService,
       notificationsService,
       chatGateway,
     );

@@ -47,4 +47,22 @@ class ConversationRemoteDataSource {
     final conversation = response['conversation'] as Map<String, dynamic>;
     return conversation['id'] as String;
   }
+
+  Future<String> createGroupConversation({
+    required String accessToken,
+    required String title,
+    required List<String> memberHandles,
+  }) async {
+    final response = await _apiClient.postJson(
+      '/conversations/group',
+      accessToken: accessToken,
+      body: {
+        'title': title,
+        'memberHandles': memberHandles,
+      },
+    );
+
+    final conversation = response['conversation'] as Map<String, dynamic>;
+    return conversation['id'] as String;
+  }
 }

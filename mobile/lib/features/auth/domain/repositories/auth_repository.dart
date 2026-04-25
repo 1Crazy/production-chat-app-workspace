@@ -9,13 +9,13 @@ abstract class AuthRepository {
     required String identifier,
     required String code,
     required String nickname,
-    required String deviceName,
+    String? deviceName,
   });
 
   Future<AuthSession> login({
     required String identifier,
     required String code,
-    required String deviceName,
+    String? deviceName,
   });
 
   Future<AuthSession> refresh({required String refreshToken});

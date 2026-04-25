@@ -13,6 +13,20 @@ abstract class PushTokenProvider {
   Stream<DevicePushToken> get tokenRefreshStream;
 }
 
+class NoopPushTokenProvider implements PushTokenProvider {
+  const NoopPushTokenProvider();
+
+  @override
+  Future<DevicePushToken?> fetchDevicePushToken() async {
+    return null;
+  }
+
+  @override
+  Stream<DevicePushToken> get tokenRefreshStream {
+    return const Stream<DevicePushToken>.empty();
+  }
+}
+
 class FirebaseMessagingPushTokenProvider implements PushTokenProvider {
   FirebaseMessagingPushTokenProvider({FirebaseMessaging? messaging})
     : _messaging = messaging ?? FirebaseMessaging.instance;

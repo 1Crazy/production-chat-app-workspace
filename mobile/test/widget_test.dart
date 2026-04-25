@@ -195,6 +195,15 @@ class _FakeConversationRepository implements ConversationRepository {
   }) async {
     return 'conversation-id';
   }
+
+  @override
+  Future<String> createGroupConversation({
+    required String accessToken,
+    required String title,
+    required List<String> memberHandles,
+  }) async {
+    return 'group-conversation-id';
+  }
 }
 
 class _FakeChatRealtime implements ChatRealtime {
