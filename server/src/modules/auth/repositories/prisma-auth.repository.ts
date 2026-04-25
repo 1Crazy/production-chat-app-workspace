@@ -1,13 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import type {
-  DeviceSession,
-  User,
-  VerificationCode,
-} from '@prisma/client';
+import type { DeviceSession, User, VerificationCode } from '@prisma/client';
 
 import type { AuthUserEntity } from '../entities/auth-user.entity';
 import type { DeviceSessionEntity } from '../entities/device-session.entity';
-import type { VerificationCodeEntity } from '../entities/verification-code.entity';
+import type {
+  VerificationCodeEntity,
+  VerificationCodePurpose,
+} from '../entities/verification-code.entity';
 
 import { AuthRepository } from './auth.repository';
 
@@ -21,14 +20,19 @@ export class PrismaAuthRepository extends AuthRepository {
 
   override async createVerificationCode(
     identifier: string,
+    purpose: VerificationCodePurpose,
     code: string,
     expiresAt: Date,
   ): Promise<VerificationCodeEntity> {
     const verificationCode = await this.prismaService.verificationCode.upsert({
       where: {
-        identifier,
+        identifier_purpose: {
+          identifier,
+          purpose,
+        },
       },
       update: {
+        purpose,
         code,
         createdAt: new Date(),
         expiresAt,
@@ -36,6 +40,7 @@ export class PrismaAuthRepository extends AuthRepository {
       },
       create: {
         identifier,
+        purpose,
         code,
         expiresAt,
       },
@@ -46,11 +51,15 @@ export class PrismaAuthRepository extends AuthRepository {
 
   override async findVerificationCode(
     identifier: string,
+    purpose: VerificationCodePurpose,
   ): Promise<VerificationCodeEntity | null> {
     const verificationCode =
       await this.prismaService.verificationCode.findUnique({
         where: {
-          identifier,
+          identifier_purpose: {
+            identifier,
+            purpose,
+          },
         },
       });
 
@@ -64,9 +73,13 @@ export class PrismaAuthRepository extends AuthRepository {
   ): Promise<void> {
     await this.prismaService.verificationCode.upsert({
       where: {
-        identifier: entity.identifier,
+        identifier_purpose: {
+          identifier: entity.identifier,
+          purpose: entity.purpose,
+        },
       },
       update: {
+        purpose: entity.purpose,
         code: entity.code,
         createdAt: entity.createdAt,
         expiresAt: entity.expiresAt,
@@ -74,6 +87,7 @@ export class PrismaAuthRepository extends AuthRepository {
       },
       create: {
         identifier: entity.identifier,
+        purpose: entity.purpose,
         code: entity.code,
         createdAt: entity.createdAt,
         expiresAt: entity.expiresAt,
@@ -86,12 +100,16 @@ export class PrismaAuthRepository extends AuthRepository {
     identifier: string;
     nickname: string;
     handle: string;
+    passwordHash?: string | null;
+    passwordUpdatedAt?: Date | null;
   }): Promise<AuthUserEntity> {
     const user = await this.prismaService.user.create({
       data: {
         identifier: params.identifier,
         nickname: params.nickname,
         handle: params.handle,
+        passwordHash: params.passwordHash ?? null,
+        passwordUpdatedAt: params.passwordUpdatedAt ?? null,
       },
     });
 
@@ -156,6 +174,8 @@ export class PrismaAuthRepository extends AuthRepository {
       data: {
         nickname: user.nickname,
         handle: user.handle,
+        passwordHash: user.passwordHash,
+        passwordUpdatedAt: user.passwordUpdatedAt,
         avatarUrl: user.avatarUrl,
         discoveryMode: user.discoveryMode,
         disabledAt: user.disabledAt,
@@ -244,6 +264,8 @@ export class PrismaAuthRepository extends AuthRepository {
       identifier: user.identifier,
       nickname: user.nickname,
       handle: user.handle,
+      passwordHash: user.passwordHash,
+      passwordUpdatedAt: user.passwordUpdatedAt,
       avatarUrl: user.avatarUrl,
       discoveryMode: user.discoveryMode as AuthUserEntity['discoveryMode'],
       createdAt: user.createdAt,
@@ -257,6 +279,7 @@ export class PrismaAuthRepository extends AuthRepository {
   ): VerificationCodeEntity {
     return {
       identifier: verificationCode.identifier,
+      purpose: verificationCode.purpose as VerificationCodePurpose,
       code: verificationCode.code,
       createdAt: verificationCode.createdAt,
       expiresAt: verificationCode.expiresAt,

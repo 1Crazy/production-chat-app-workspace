@@ -11,10 +11,12 @@ import { LoginDto } from '@app/modules/auth/dto/login.dto';
 import { RefreshTokenDto } from '@app/modules/auth/dto/refresh-token.dto';
 import { RegisterDto } from '@app/modules/auth/dto/register.dto';
 import { RequestAuthCodeDto } from '@app/modules/auth/dto/request-auth-code.dto';
+import { ResetPasswordDto } from '@app/modules/auth/dto/reset-password.dto';
 import { AccessTokenGuard } from '@app/modules/auth/guards/access-token.guard';
 import { AuthRepository } from '@app/modules/auth/repositories/auth.repository';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
+import { AuthPasswordService } from '@app/modules/auth/services/auth-password.service';
 import { AuthTokenService } from '@app/modules/auth/services/auth-token.service';
 import { AuthService } from '@app/modules/auth/services/auth.service';
 import type { AuthenticatedRequest } from '@app/modules/auth/types/authenticated-request.type';
@@ -42,6 +44,7 @@ describe('AuthController integration', () => {
       providers: [
         AuthService,
         AuthTokenService,
+        AuthPasswordService,
         AuthIdentityService,
         AccessTokenGuard,
         {
@@ -76,6 +79,7 @@ describe('AuthController integration', () => {
     const requestCodeDto = (await validationPipe.transform(
       {
         identifier: 'alice_user',
+        purpose: 'register',
       },
       {
         type: 'body',
@@ -100,6 +104,7 @@ describe('AuthController integration', () => {
       {
         identifier: 'alice_user',
         code: requestCodeResponse.debugCode,
+        password: 'Alice1234',
         nickname: 'Alice',
         deviceName: 'alice-phone',
       },
@@ -149,26 +154,10 @@ describe('AuthController integration', () => {
       isCurrent: true,
     });
 
-    const loginCodeResponse = await controller.requestCode(
-      {
-        headers: {
-          'x-forwarded-for': '127.0.0.1',
-        },
-      } as unknown as Request,
-      (await validationPipe.transform(
-        {
-          identifier: 'alice_user',
-        },
-        {
-          type: 'body',
-          metatype: RequestAuthCodeDto,
-        },
-      )) as RequestAuthCodeDto,
-    );
     const loginDto = (await validationPipe.transform(
       {
         identifier: 'alice_user',
-        code: loginCodeResponse.debugCode,
+        password: 'Alice1234',
         deviceName: 'alice-ipad',
       },
       {
@@ -186,6 +175,47 @@ describe('AuthController integration', () => {
     );
 
     expect(loginResponse.currentSession.deviceName).toBe('alice-ipad');
+
+    const resetCodeResponse = await controller.requestCode(
+      {
+        headers: {
+          'x-forwarded-for': '127.0.0.1',
+        },
+      } as unknown as Request,
+      (await validationPipe.transform(
+        {
+          identifier: 'alice_user',
+          purpose: 'reset-password',
+        },
+        {
+          type: 'body',
+          metatype: RequestAuthCodeDto,
+        },
+      )) as RequestAuthCodeDto,
+    );
+
+    const resetPasswordResponse = await controller.resetPassword(
+      {
+        headers: {
+          'x-forwarded-for': '127.0.0.1',
+        },
+      } as unknown as Request,
+      (await validationPipe.transform(
+        {
+          identifier: 'alice_user',
+          code: resetCodeResponse.debugCode,
+          password: 'Alice5678',
+        },
+        {
+          type: 'body',
+          metatype: ResetPasswordDto,
+        },
+      )) as ResetPasswordDto,
+    );
+
+    expect(resetPasswordResponse).toEqual({
+      success: true,
+    });
 
     const refreshResponse = await controller.refresh(
       (await validationPipe.transform(

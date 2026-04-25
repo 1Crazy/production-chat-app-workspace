@@ -1,16 +1,21 @@
 import type { AuthUserEntity } from '../entities/auth-user.entity';
 import type { DeviceSessionEntity } from '../entities/device-session.entity';
-import type { VerificationCodeEntity } from '../entities/verification-code.entity';
+import type {
+  VerificationCodeEntity,
+  VerificationCodePurpose,
+} from '../entities/verification-code.entity';
 
 export abstract class AuthRepository {
   abstract createVerificationCode(
     identifier: string,
+    purpose: VerificationCodePurpose,
     code: string,
     expiresAt: Date,
   ): Promise<VerificationCodeEntity>;
 
   abstract findVerificationCode(
     identifier: string,
+    purpose: VerificationCodePurpose,
   ): Promise<VerificationCodeEntity | null>;
 
   abstract saveVerificationCode(entity: VerificationCodeEntity): Promise<void>;
@@ -19,6 +24,8 @@ export abstract class AuthRepository {
     identifier: string;
     nickname: string;
     handle: string;
+    passwordHash?: string | null;
+    passwordUpdatedAt?: Date | null;
   }): Promise<AuthUserEntity>;
 
   abstract findUserByIdentifier(
@@ -51,5 +58,7 @@ export abstract class AuthRepository {
     userId: string,
   ): Promise<DeviceSessionEntity[]>;
 
-  abstract revokeSession(sessionId: string): Promise<DeviceSessionEntity | null>;
+  abstract revokeSession(
+    sessionId: string,
+  ): Promise<DeviceSessionEntity | null>;
 }

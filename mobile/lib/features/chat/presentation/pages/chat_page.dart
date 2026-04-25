@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:production_chat_app/features/chat/application/chat_controller.dart';
 import 'package:production_chat_app/features/chat/domain/entities/chat_message.dart';
 import 'package:production_chat_app/features/chat/domain/entities/chat_read_receipt_member.dart';
+import 'package:production_chat_app/features/chat/presentation/chat_time_format.dart';
 import 'package:production_chat_app/features/chat/domain/repositories/chat_repository.dart';
 import 'package:production_chat_app/features/chat/presentation/widgets/chat_message_bubble.dart';
 import 'package:production_chat_app/features/conversation/domain/entities/conversation_summary.dart';
@@ -540,7 +541,7 @@ class _ChatDateDivider extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        _formatChatDate(dateTime),
+        formatChatDateLabel(dateTime),
         style: Theme.of(
           context,
         ).textTheme.labelSmall?.copyWith(color: const Color(0xFF98A2B3)),
@@ -560,23 +561,6 @@ bool _shouldShowDateDivider(ChatMessage? previous, ChatMessage current) {
   return left.year != right.year ||
       left.month != right.month ||
       left.day != right.day;
-}
-
-String _formatChatDate(DateTime dateTime) {
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final target = DateTime(dateTime.year, dateTime.month, dateTime.day);
-  final difference = today.difference(target).inDays;
-
-  if (difference == 0) {
-    return '今天';
-  }
-
-  if (difference == 1) {
-    return '昨天';
-  }
-
-  return '${dateTime.month}/${dateTime.day}';
 }
 
 class _CircleActionIcon extends StatelessWidget {

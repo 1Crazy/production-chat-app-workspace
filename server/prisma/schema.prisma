@@ -12,6 +12,8 @@ model User {
   identifier     String          @unique
   nickname       String
   handle         String          @unique
+  passwordHash   String?         @map("password_hash")
+  passwordUpdatedAt DateTime?    @map("password_updated_at")
   avatarUrl      String?         @map("avatar_url")
   discoveryMode  String          @default("public") @map("discovery_mode")
   createdAt      DateTime        @default(now()) @map("created_at")
@@ -31,12 +33,14 @@ model User {
 }
 
 model VerificationCode {
-  identifier String    @id
+  identifier String
+  purpose    String
   code       String
   createdAt  DateTime  @default(now()) @map("created_at")
   expiresAt  DateTime  @map("expires_at")
   consumedAt DateTime? @map("consumed_at")
 
+  @@id([identifier, purpose])
   @@map("verification_codes")
 }
 

@@ -5,9 +5,7 @@ import { AuthRepository } from '../repositories/auth.repository';
 
 @Injectable()
 export class AuthIdentityService {
-  constructor(
-    private readonly authRepository: AuthRepository,
-  ) {}
+  constructor(private readonly authRepository: AuthRepository) {}
 
   async getActiveUserById(userId: string): Promise<AuthUserEntity> {
     const user = await this.authRepository.findActiveUserById(userId);
@@ -19,9 +17,7 @@ export class AuthIdentityService {
     return user;
   }
 
-  findDiscoverableUserByHandle(
-    handle: string,
-  ): Promise<AuthUserEntity | null> {
+  findDiscoverableUserByHandle(handle: string): Promise<AuthUserEntity | null> {
     return this.authRepository.findUserByHandle(handle);
   }
 

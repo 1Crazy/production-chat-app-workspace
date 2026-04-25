@@ -1,3 +1,4 @@
+import 'package:production_chat_app/features/auth/domain/entities/auth_code_purpose.dart';
 import 'package:production_chat_app/features/auth/data/dto/auth_bundle_dto.dart';
 import 'package:production_chat_app/features/auth/data/dto/auth_code_receipt_dto.dart';
 import 'package:production_chat_app/features/auth/data/dto/device_session_dto.dart';
@@ -9,10 +10,13 @@ class AuthRemoteDataSource {
 
   final ApiClient _apiClient;
 
-  Future<AuthCodeReceiptDto> requestCode({required String identifier}) async {
+  Future<AuthCodeReceiptDto> requestCode({
+    required String identifier,
+    required AuthCodePurpose purpose,
+  }) async {
     final response = await _apiClient.postJson(
       '/auth/request-code',
-      body: {'identifier': identifier},
+      body: {'identifier': identifier, 'purpose': purpose.wireValue},
     );
 
     return AuthCodeReceiptDto.fromJson(response);
@@ -21,6 +25,7 @@ class AuthRemoteDataSource {
   Future<AuthBundleDto> register({
     required String identifier,
     required String code,
+    required String password,
     required String nickname,
     String? deviceName,
   }) async {
@@ -29,6 +34,7 @@ class AuthRemoteDataSource {
       body: {
         'identifier': identifier,
         'code': code,
+        'password': password,
         'nickname': nickname,
         if (deviceName != null && deviceName.trim().isNotEmpty)
           'deviceName': deviceName,
@@ -40,14 +46,14 @@ class AuthRemoteDataSource {
 
   Future<AuthBundleDto> login({
     required String identifier,
-    required String code,
+    required String password,
     String? deviceName,
   }) async {
     final response = await _apiClient.postJson(
       '/auth/login',
       body: {
         'identifier': identifier,
-        'code': code,
+        'password': password,
         if (deviceName != null && deviceName.trim().isNotEmpty)
           'deviceName': deviceName,
       },
@@ -63,6 +69,17 @@ class AuthRemoteDataSource {
     );
 
     return AuthBundleDto.fromJson(response);
+  }
+
+  Future<void> resetPassword({
+    required String identifier,
+    required String code,
+    required String password,
+  }) async {
+    await _apiClient.postJson(
+      '/auth/reset-password',
+      body: {'identifier': identifier, 'code': code, 'password': password},
+    );
   }
 
   Future<List<DeviceSessionDto>> listSessions({

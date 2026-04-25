@@ -7,8 +7,9 @@ export class LoginDto {
   identifier!: string;
 
   @IsString()
-  @Length(4, 8)
-  code!: string;
+  @Length(8, 72)
+  @Matches(/^(?=.*[A-Za-z])(?=.*\d).+$/)
+  password!: string;
 
   @IsOptional()
   @IsString()

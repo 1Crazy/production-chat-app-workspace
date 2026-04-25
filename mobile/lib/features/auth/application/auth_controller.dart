@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:production_chat_app/features/auth/domain/entities/auth_code_purpose.dart';
 import 'package:production_chat_app/features/auth/application/auth_status.dart';
 import 'package:production_chat_app/features/auth/domain/entities/auth_code_receipt.dart';
 import 'package:production_chat_app/features/auth/domain/entities/auth_session.dart';
@@ -60,11 +61,15 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<void> requestCode({required String identifier}) async {
+  Future<void> requestCode({
+    required String identifier,
+    required AuthCodePurpose purpose,
+  }) async {
     await _runBusy(() async {
       _errorMessage = null;
       _latestCodeReceipt = await _authRepository.requestCode(
         identifier: identifier,
+        purpose: purpose,
       );
     });
   }
@@ -72,6 +77,7 @@ class AuthController extends ChangeNotifier {
   Future<void> register({
     required String identifier,
     required String code,
+    required String password,
     required String nickname,
     String? deviceName,
   }) async {
@@ -80,6 +86,7 @@ class AuthController extends ChangeNotifier {
       _authSession = await _authRepository.register(
         identifier: identifier,
         code: code,
+        password: password,
         nickname: nickname,
         deviceName: deviceName,
       );
@@ -91,19 +98,34 @@ class AuthController extends ChangeNotifier {
 
   Future<void> login({
     required String identifier,
-    required String code,
+    required String password,
     String? deviceName,
   }) async {
     await _runBusy(() async {
       _errorMessage = null;
       _authSession = await _authRepository.login(
         identifier: identifier,
-        code: code,
+        password: password,
         deviceName: deviceName,
       );
       _status = AuthStatus.authenticated;
       await _syncPushRegistration();
       await loadDeviceSessions(silent: true);
+    });
+  }
+
+  Future<void> resetPassword({
+    required String identifier,
+    required String code,
+    required String password,
+  }) async {
+    await _runBusy(() async {
+      _errorMessage = null;
+      await _authRepository.resetPassword(
+        identifier: identifier,
+        code: code,
+        password: password,
+      );
     });
   }
 

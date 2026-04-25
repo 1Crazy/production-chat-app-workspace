@@ -14,6 +14,7 @@ import { LoginDto } from '../dto/login.dto';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { RequestAuthCodeDto } from '../dto/request-auth-code.dto';
+import { ResetPasswordDto } from '../dto/reset-password.dto';
 import { AccessTokenGuard } from '../guards/access-token.guard';
 import { AuthService } from '../services/auth.service';
 import type { AuthenticatedRequest } from '../types/authenticated-request.type';
@@ -31,8 +32,12 @@ export class AuthController {
 
   // 首期先提供开发验证码接口，后续可以替换成短信或邮件服务。
   @Post('request-code')
-  requestCode(@Req() request: Request, @Body() dto: RequestAuthCodeDto): Promise<{
+  requestCode(
+    @Req() request: Request,
+    @Body() dto: RequestAuthCodeDto,
+  ): Promise<{
     identifier: string;
+    purpose: 'register' | 'reset-password';
     debugCode: string;
     expiresInSeconds: number;
   }> {
@@ -47,6 +52,14 @@ export class AuthController {
   @Post('login')
   login(@Req() request: Request, @Body() dto: LoginDto) {
     return this.authService.login(dto, extractRequestSourceKey(request));
+  }
+
+  @Post('reset-password')
+  resetPassword(@Req() request: Request, @Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(
+      dto,
+      extractRequestSourceKey(request),
+    );
   }
 
   @Post('refresh')

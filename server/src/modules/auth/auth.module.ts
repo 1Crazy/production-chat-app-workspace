@@ -5,6 +5,7 @@ import { AccessTokenGuard } from './guards/access-token.guard';
 import { AuthRepository } from './repositories/auth.repository';
 import { PrismaAuthRepository } from './repositories/prisma-auth.repository';
 import { AuthIdentityService } from './services/auth-identity.service';
+import { AuthPasswordService } from './services/auth-password.service';
 import { AuthTokenService } from './services/auth-token.service';
 import { AuthService } from './services/auth.service';
 
@@ -18,6 +19,7 @@ import { RealtimeModule } from '@app/modules/realtime/realtime.module';
   providers: [
     AuthService,
     AuthTokenService,
+    AuthPasswordService,
     AuthIdentityService,
     PrismaAuthRepository,
     {

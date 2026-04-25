@@ -1,3 +1,4 @@
+import 'package:production_chat_app/features/auth/domain/entities/auth_code_purpose.dart';
 import 'package:production_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:production_chat_app/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:production_chat_app/features/auth/domain/entities/auth_code_receipt.dart';
@@ -16,8 +17,14 @@ class AuthRepositoryImpl implements AuthRepository {
   final AuthLocalDataSource _localDataSource;
 
   @override
-  Future<AuthCodeReceipt> requestCode({required String identifier}) async {
-    final dto = await _remoteDataSource.requestCode(identifier: identifier);
+  Future<AuthCodeReceipt> requestCode({
+    required String identifier,
+    required AuthCodePurpose purpose,
+  }) async {
+    final dto = await _remoteDataSource.requestCode(
+      identifier: identifier,
+      purpose: purpose,
+    );
     return dto.toEntity();
   }
 
@@ -25,12 +32,14 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<AuthSession> register({
     required String identifier,
     required String code,
+    required String password,
     required String nickname,
     String? deviceName,
   }) async {
     final dto = await _remoteDataSource.register(
       identifier: identifier,
       code: code,
+      password: password,
       nickname: nickname,
       deviceName: deviceName,
     );
@@ -41,12 +50,12 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<AuthSession> login({
     required String identifier,
-    required String code,
+    required String password,
     String? deviceName,
   }) async {
     final dto = await _remoteDataSource.login(
       identifier: identifier,
-      code: code,
+      password: password,
       deviceName: deviceName,
     );
     await _localDataSource.saveSession(dto);
@@ -58,6 +67,19 @@ class AuthRepositoryImpl implements AuthRepository {
     final dto = await _remoteDataSource.refresh(refreshToken: refreshToken);
     await _localDataSource.saveSession(dto);
     return dto.toEntity();
+  }
+
+  @override
+  Future<void> resetPassword({
+    required String identifier,
+    required String code,
+    required String password,
+  }) async {
+    await _remoteDataSource.resetPassword(
+      identifier: identifier,
+      code: code,
+      password: password,
+    );
   }
 
   @override

@@ -6,6 +6,7 @@ import 'package:production_chat_app/app/dependencies/app_dependencies.dart';
 import 'package:production_chat_app/app/dependencies/app_dependencies_scope.dart';
 import 'package:production_chat_app/features/auth/application/auth_controller.dart';
 import 'package:production_chat_app/features/auth/application/auth_scope.dart';
+import 'package:production_chat_app/features/auth/domain/entities/auth_code_purpose.dart';
 import 'package:production_chat_app/features/auth/domain/entities/auth_code_receipt.dart';
 import 'package:production_chat_app/features/auth/domain/entities/auth_session.dart';
 import 'package:production_chat_app/features/auth/domain/entities/auth_user.dart';
@@ -30,65 +31,66 @@ import 'package:production_chat_app/shared/realtime/chat_realtime.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime_event.dart';
 
 void main() {
-  testWidgets('profile page can open direct conversation from discovered user', (
-    tester,
-  ) async {
-    final authController = AuthController(
-      authRepository: _FakeAuthRepository(),
-      pushRegistrationService: _FakePushRegistrationService(),
-    );
-    await authController.bootstrap();
+  testWidgets(
+    'profile page can open direct conversation from discovered user',
+    (tester) async {
+      final authController = AuthController(
+        authRepository: _FakeAuthRepository(),
+        pushRegistrationService: _FakePushRegistrationService(),
+      );
+      await authController.bootstrap();
 
-    String? openedHandle;
+      String? openedHandle;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: AppDependenciesScope(
-            dependencies: AppDependencies(
-              authRepository: _FakeAuthRepository(),
-              appBadgeService: const AppBadgeService(),
-              chatRepository: _FakeChatRepository(),
-              chatRealtime: _FakeChatRealtime(),
-              conversationRepository: _FakeConversationRepository(),
-              firebaseReady: false,
-              notificationRemoteDataSource: NotificationRemoteDataSource(
-                apiClient: ApiClient(baseUrl: 'http://localhost:3000'),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppDependenciesScope(
+              dependencies: AppDependencies(
+                authRepository: _FakeAuthRepository(),
+                appBadgeService: const AppBadgeService(),
+                chatRepository: _FakeChatRepository(),
+                chatRealtime: _FakeChatRealtime(),
+                conversationRepository: _FakeConversationRepository(),
+                firebaseReady: false,
+                notificationRemoteDataSource: NotificationRemoteDataSource(
+                  apiClient: ApiClient(baseUrl: 'http://localhost:3000'),
+                ),
+                profileRepository: _FakeProfileRepository(),
+                pushNotificationService: const NoopPushNotificationService(),
+                pushRegistrationService: _FakePushRegistrationService(),
               ),
-              profileRepository: _FakeProfileRepository(),
-              pushNotificationService: const NoopPushNotificationService(),
-              pushRegistrationService: _FakePushRegistrationService(),
-            ),
-            child: AuthScope(
-              controller: authController,
-              child: ProfilePage(
-                onOpenDirectConversation: (handle) async {
-                  openedHandle = handle;
-                },
+              child: AuthScope(
+                controller: authController,
+                child: ProfilePage(
+                  onOpenDirectConversation: (handle) async {
+                    openedHandle = handle;
+                  },
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -600));
-    await tester.pumpAndSettle();
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -600));
+      await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).last, 'peer_user');
-    await tester.tap(find.text('查询联系人'));
-    await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, 'peer_user');
+      await tester.tap(find.text('查询联系人'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('@peer_user'), findsOneWidget);
+      expect(find.text('@peer_user'), findsOneWidget);
 
-    await tester.tap(find.text('发起/打开单聊'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('发起/打开单聊'));
+      await tester.pumpAndSettle();
 
-    expect(openedHandle, 'peer_user');
-    expect(find.text('已打开单聊'), findsOneWidget);
-  });
+      expect(openedHandle, 'peer_user');
+      expect(find.text('已打开单聊'), findsOneWidget);
+    },
+  );
 }
 
 class _FakeAuthRepository implements AuthRepository {
@@ -98,14 +100,16 @@ class _FakeAuthRepository implements AuthRepository {
   @override
   Future<AuthSession> login({
     required String identifier,
-    required String code,
-    required String deviceName,
+    required String password,
+    String? deviceName,
   }) async {
     return _session;
   }
 
   @override
-  Future<List<DeviceSession>> listSessions({required String accessToken}) async {
+  Future<List<DeviceSession>> listSessions({
+    required String accessToken,
+  }) async {
     return [_session.currentSession];
   }
 
@@ -121,20 +125,32 @@ class _FakeAuthRepository implements AuthRepository {
   Future<AuthSession> register({
     required String identifier,
     required String code,
+    required String password,
     required String nickname,
-    required String deviceName,
+    String? deviceName,
   }) async {
     return _session;
   }
 
   @override
-  Future<AuthCodeReceipt> requestCode({required String identifier}) async {
-    return const AuthCodeReceipt(
+  Future<AuthCodeReceipt> requestCode({
+    required String identifier,
+    required AuthCodePurpose purpose,
+  }) async {
+    return AuthCodeReceipt(
       identifier: 'demo_user',
+      purpose: purpose,
       debugCode: '246810',
       expiresInSeconds: 600,
     );
   }
+
+  @override
+  Future<void> resetPassword({
+    required String identifier,
+    required String code,
+    required String password,
+  }) async {}
 
   @override
   Future<void> revokeSession({

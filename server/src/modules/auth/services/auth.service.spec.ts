@@ -1,5 +1,6 @@
 import { InMemoryAuthRepository } from '../repositories/in-memory-auth.repository';
 
+import { AuthPasswordService } from './auth-password.service';
 import { AuthTokenService } from './auth-token.service';
 import { AuthService } from './auth.service';
 
@@ -24,8 +25,10 @@ describe('AuthService', () => {
     const rateLimitService = {
       consumeOrThrow: jest.fn().mockResolvedValue(undefined),
     } as unknown as RateLimitService;
+    const authPasswordService = new AuthPasswordService();
     const service = new AuthService(
       authRepository,
+      authPasswordService,
       authTokenService,
       rateLimitService,
       chatGateway,
@@ -45,20 +48,24 @@ describe('AuthService', () => {
 
     const firstCode = await fixture.service.requestCode({
       identifier: firstIdentifier,
+      purpose: 'register',
     });
     await fixture.service.register({
       identifier: firstIdentifier,
       code: firstCode.debugCode,
+      password: 'Alice1234',
       nickname: 'Alice',
       deviceName: 'alice-phone',
     });
 
     const secondCode = await fixture.service.requestCode({
       identifier: secondIdentifier,
+      purpose: 'register',
     });
     const secondRegistration = await fixture.service.register({
       identifier: secondIdentifier,
       code: secondCode.debugCode,
+      password: 'Alice5678',
       nickname: 'Alice Clone',
       deviceName: 'clone-phone',
     });
@@ -80,9 +87,45 @@ describe('AuthService', () => {
       fixture.service.requestCode(
         {
           identifier: 'alice@example.com',
+          purpose: 'register',
         },
         'source-1',
       ),
     ).rejects.toThrow('验证码请求过于频繁，请稍后再试');
+  });
+
+  it('should require a password reset before legacy code-only accounts can login', async () => {
+    const fixture = createFixture();
+    const code = await fixture.service.requestCode({
+      identifier: 'alice@example.com',
+      purpose: 'register',
+    });
+    const registration = await fixture.service.register({
+      identifier: 'alice@example.com',
+      code: code.debugCode,
+      password: 'Alice1234',
+      nickname: 'Alice',
+      deviceName: 'alice-phone',
+    });
+
+    const user = await fixture.authRepository.findUserByIdentifier(
+      registration.user.identifier,
+    );
+
+    if (!user) {
+      throw new Error('expected registered user');
+    }
+
+    user.passwordHash = null;
+    user.passwordUpdatedAt = null;
+    await fixture.authRepository.saveUser(user);
+
+    await expect(
+      fixture.service.login({
+        identifier: 'alice@example.com',
+        password: 'Alice1234',
+        deviceName: 'alice-ipad',
+      }),
+    ).rejects.toThrow('当前账号尚未设置密码，请先重置密码');
   });
 });

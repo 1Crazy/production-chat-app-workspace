@@ -1,6 +1,6 @@
-import { IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsString, Length, Matches } from 'class-validator';
 
-export class RegisterDto {
+export class ResetPasswordDto {
   @IsString()
   @Length(3, 64)
   @Matches(/^[a-zA-Z0-9_.@+-]+$/)
@@ -14,13 +14,4 @@ export class RegisterDto {
   @Length(8, 72)
   @Matches(/^(?=.*[A-Za-z])(?=.*\d).+$/)
   password!: string;
-
-  @IsString()
-  @Length(2, 32)
-  nickname!: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(2, 48)
-  deviceName?: string;
 }

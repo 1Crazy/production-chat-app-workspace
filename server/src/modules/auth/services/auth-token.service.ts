@@ -119,9 +119,7 @@ export class AuthTokenService {
       throw new UnauthorizedException('令牌签名校验失败');
     }
 
-    if (
-      !timingSafeEqual(signatureBuffer, expectedSignatureBuffer)
-    ) {
+    if (!timingSafeEqual(signatureBuffer, expectedSignatureBuffer)) {
       throw new UnauthorizedException('令牌签名校验失败');
     }
 

@@ -8,17 +8,23 @@ import {
   forwardRef,
 } from '@nestjs/common';
 
-import type { AuthResponseDto, DeviceSessionView } from '../dto/auth-response.dto';
+import type {
+  AuthResponseDto,
+  DeviceSessionView,
+} from '../dto/auth-response.dto';
 import { toAuthUserView, toDeviceSessionView } from '../dto/auth-response.dto';
 import type { LoginDto } from '../dto/login.dto';
 import type { RefreshTokenDto } from '../dto/refresh-token.dto';
 import type { RegisterDto } from '../dto/register.dto';
 import type { RequestAuthCodeDto } from '../dto/request-auth-code.dto';
+import type { ResetPasswordDto } from '../dto/reset-password.dto';
 import type { AuthUserEntity } from '../entities/auth-user.entity';
 import type { DeviceSessionEntity } from '../entities/device-session.entity';
+import type { VerificationCodePurpose } from '../entities/verification-code.entity';
 import { AuthRepository } from '../repositories/auth.repository';
 import type { AuthenticatedRequest } from '../types/authenticated-request.type';
 
+import { AuthPasswordService } from './auth-password.service';
 import { AuthTokenService } from './auth-token.service';
 
 import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
@@ -32,6 +38,7 @@ export class AuthService {
 
   constructor(
     private readonly authRepository: AuthRepository,
+    private readonly authPasswordService: AuthPasswordService,
     private readonly authTokenService: AuthTokenService,
     private readonly rateLimitService: RateLimitService,
     @Inject(forwardRef(() => ChatGateway))
@@ -50,12 +57,14 @@ export class AuthService {
     sourceKey = 'unknown-source',
   ): Promise<{
     identifier: string;
+    purpose: VerificationCodePurpose;
     debugCode: string;
     expiresInSeconds: number;
   }> {
     const normalizedIdentifier = dto.identifier.trim().toLowerCase();
+    const purpose = dto.purpose;
     await this.assertAuthRateLimit({
-      scope: 'auth.request-code',
+      scope: `auth.request-code.${purpose}`,
       sourceKey,
       identifier: normalizedIdentifier,
       sourceLimit: 6,
@@ -69,12 +78,14 @@ export class AuthService {
 
     await this.authRepository.createVerificationCode(
       normalizedIdentifier,
+      purpose,
       verificationCode,
       expiresAt,
     );
 
     return {
       identifier: normalizedIdentifier,
+      purpose,
       debugCode: verificationCode,
       expiresInSeconds: this.verificationCodeTtlSeconds,
     };
@@ -98,11 +109,16 @@ export class AuthService {
       throw new ConflictException('该标识已完成注册');
     }
 
-    await this.assertVerificationCode(identifier, dto.code);
+    await this.assertVerificationCode(identifier, 'register', dto.code);
+    const passwordHash = await this.authPasswordService.hashPassword(
+      dto.password,
+    );
     const user = await this.authRepository.createUser({
       identifier,
       nickname: dto.nickname.trim(),
       handle: await this.buildUniqueHandle(identifier),
+      passwordHash,
+      passwordUpdatedAt: new Date(),
     });
     const session = await this.authRepository.createSession({
       userId: user.id,
@@ -132,7 +148,19 @@ export class AuthService {
       throw new NotFoundException('账号不存在或已被禁用');
     }
 
-    await this.assertVerificationCode(identifier, dto.code);
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('当前账号尚未设置密码，请先重置密码');
+    }
+
+    const passwordMatched = await this.authPasswordService.verifyPassword(
+      dto.password,
+      user.passwordHash,
+    );
+
+    if (!passwordMatched) {
+      throw new UnauthorizedException('账号或密码不正确');
+    }
+
     const session = await this.authRepository.createSession({
       userId: user.id,
       deviceName: dto.deviceName?.trim() || 'flutter-device',
@@ -142,9 +170,41 @@ export class AuthService {
     return this.buildAuthResponse(user, session);
   }
 
+  async resetPassword(
+    dto: ResetPasswordDto,
+    sourceKey = 'unknown-source',
+  ): Promise<{ success: boolean }> {
+    const identifier = dto.identifier.trim().toLowerCase();
+    await this.assertAuthRateLimit({
+      scope: 'auth.reset-password',
+      sourceKey,
+      identifier,
+      sourceLimit: 5,
+      identifierLimit: 3,
+      message: '重置密码尝试过于频繁，请稍后再试',
+    });
+    const user = await this.authRepository.findUserByIdentifier(identifier);
+
+    if (!user || user.disabledAt) {
+      throw new NotFoundException('账号不存在或已被禁用');
+    }
+
+    await this.assertVerificationCode(identifier, 'reset-password', dto.code);
+    user.passwordHash = await this.authPasswordService.hashPassword(
+      dto.password,
+    );
+    user.passwordUpdatedAt = new Date();
+    await this.authRepository.saveUser(user);
+    return {
+      success: true,
+    };
+  }
+
   async refresh(dto: RefreshTokenDto): Promise<AuthResponseDto> {
     const payload = this.authTokenService.verifyRefreshToken(dto.refreshToken);
-    const session = await this.authRepository.findActiveSessionById(payload.sid);
+    const session = await this.authRepository.findActiveSessionById(
+      payload.sid,
+    );
     const user = await this.authRepository.findActiveUserById(payload.sub);
 
     if (!session || !user || session.userId !== user.id) {
@@ -193,9 +253,8 @@ export class AuthService {
     success: boolean;
     revokedSessionId: string;
   }> {
-    const targetSession = await this.authRepository.findActiveSessionById(
-      sessionId,
-    );
+    const targetSession =
+      await this.authRepository.findActiveSessionById(sessionId);
 
     if (!targetSession || targetSession.userId !== request.auth.user.id) {
       throw new NotFoundException('设备会话不存在');
@@ -210,9 +269,7 @@ export class AuthService {
     };
   }
 
-  async logout(
-    request: AuthenticatedRequest,
-  ): Promise<{ success: boolean }> {
+  async logout(request: AuthenticatedRequest): Promise<{ success: boolean }> {
     await this.authRepository.revokeSession(request.auth.session.id);
     await this.chatGateway.disconnectSession(request.auth.session.id, 'logout');
     return {
@@ -222,26 +279,29 @@ export class AuthService {
 
   private async assertVerificationCode(
     identifier: string,
+    purpose: VerificationCodePurpose,
     code: string,
   ): Promise<void> {
     const verificationCode = await this.authRepository.findVerificationCode(
       identifier,
+      purpose,
     );
+    const purposeLabel = this.getVerificationCodePurposeLabel(purpose);
 
     if (!verificationCode) {
-      throw new BadRequestException('请先获取验证码');
+      throw new BadRequestException(`请先获取${purposeLabel}验证码`);
     }
 
     if (verificationCode.consumedAt) {
-      throw new BadRequestException('验证码已使用，请重新获取');
+      throw new BadRequestException(`${purposeLabel}验证码已使用，请重新获取`);
     }
 
     if (verificationCode.expiresAt.getTime() <= Date.now()) {
-      throw new BadRequestException('验证码已过期，请重新获取');
+      throw new BadRequestException(`${purposeLabel}验证码已过期，请重新获取`);
     }
 
     if (verificationCode.code !== code.trim()) {
-      throw new BadRequestException('验证码不正确');
+      throw new BadRequestException(`${purposeLabel}验证码不正确`);
     }
 
     verificationCode.consumedAt = new Date();
@@ -291,6 +351,17 @@ export class AuthService {
 
   private generateVerificationCode(): string {
     return `${Math.floor(100000 + Math.random() * 900000)}`;
+  }
+
+  private getVerificationCodePurposeLabel(
+    purpose: VerificationCodePurpose,
+  ): string {
+    switch (purpose) {
+      case 'register':
+        return '注册';
+      case 'reset-password':
+        return '重置密码';
+    }
   }
 
   private async assertAuthRateLimit(params: {

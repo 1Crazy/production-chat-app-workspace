@@ -169,6 +169,8 @@ String _friendlyApiMessage(int statusCode, String message) {
         return '注册尝试过于频繁，请 10 分钟后再试';
       case '验证码请求过于频繁，请稍后再试':
         return '验证码请求过于频繁，请 10 分钟后再试';
+      case '重置密码尝试过于频繁，请稍后再试':
+        return '重置密码尝试过于频繁，请 10 分钟后再试';
     }
   }
 
@@ -180,9 +182,13 @@ String _translateValidationMessage(String rawMessage) {
 
   const exactMappings = {
     'identifier must be a string': '账号格式不正确',
+    'purpose must be a string': '验证码用途不正确',
     'code must be a string': '验证码格式不正确',
+    'password must be a string': '密码格式不正确',
     'deviceName must be a string': '本机名称格式不正确',
     'nickname must be a string': '昵称格式不正确',
+    'purpose must be one of the following values: register, reset-password':
+        '验证码用途不正确',
   };
 
   if (exactMappings.containsKey(message)) {
@@ -200,6 +206,11 @@ String _translateValidationMessage(String rawMessage) {
         '验证码至少需要 4 位',
     RegExp(r'^code must be shorter than or equal to 8 characters$'):
         '验证码最多支持 8 位',
+    RegExp(r'^password must be longer than or equal to 8 characters$'):
+        '密码至少需要 8 个字符',
+    RegExp(r'^password must be shorter than or equal to 72 characters$'):
+        '密码最多支持 72 个字符',
+    RegExp(r'^password must match .+ regular expression$'): '密码需要同时包含字母和数字',
     RegExp(r'^deviceName must be longer than or equal to 2 characters$'):
         '本机名称至少需要 2 个字符',
     RegExp(r'^deviceName must be shorter than or equal to 48 characters$'):

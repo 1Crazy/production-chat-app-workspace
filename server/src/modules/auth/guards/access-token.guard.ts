@@ -21,7 +21,9 @@ export class AccessTokenGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const token = this.extractBearerToken(request);
     const payload = this.authTokenService.verifyAccessToken(token);
-    const session = await this.authRepository.findActiveSessionById(payload.sid);
+    const session = await this.authRepository.findActiveSessionById(
+      payload.sid,
+    );
     const user = await this.authRepository.findActiveUserById(payload.sub);
 
     if (!session || !user || session.userId !== user.id) {

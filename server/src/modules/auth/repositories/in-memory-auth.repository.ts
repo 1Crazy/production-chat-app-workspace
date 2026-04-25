@@ -4,7 +4,10 @@ import { Injectable } from '@nestjs/common';
 
 import type { AuthUserEntity } from '../entities/auth-user.entity';
 import type { DeviceSessionEntity } from '../entities/device-session.entity';
-import type { VerificationCodeEntity } from '../entities/verification-code.entity';
+import type {
+  VerificationCodeEntity,
+  VerificationCodePurpose,
+} from '../entities/verification-code.entity';
 
 import { AuthRepository } from './auth.repository';
 
@@ -14,41 +17,59 @@ export class InMemoryAuthRepository extends AuthRepository {
   private readonly userIdsByIdentifier = new Map<string, string>();
   private readonly userIdsByHandle = new Map<string, string>();
   private readonly sessionsById = new Map<string, DeviceSessionEntity>();
-  private readonly verificationCodes = new Map<string, VerificationCodeEntity>();
+  private readonly verificationCodes = new Map<
+    string,
+    VerificationCodeEntity
+  >();
 
   override async createVerificationCode(
     identifier: string,
+    purpose: VerificationCodePurpose,
     code: string,
     expiresAt: Date,
   ): Promise<VerificationCodeEntity> {
     const entity: VerificationCodeEntity = {
       identifier,
+      purpose,
       code,
       createdAt: new Date(),
       expiresAt,
       consumedAt: null,
     };
 
-    this.verificationCodes.set(identifier, entity);
+    this.verificationCodes.set(
+      this.buildVerificationCodeKey(identifier, purpose),
+      entity,
+    );
     return entity;
   }
 
   override async findVerificationCode(
     identifier: string,
+    purpose: VerificationCodePurpose,
   ): Promise<VerificationCodeEntity | null> {
-    return this.verificationCodes.get(identifier) ?? null;
+    return (
+      this.verificationCodes.get(
+        this.buildVerificationCodeKey(identifier, purpose),
+      ) ?? null
+    );
   }
 
   override async saveVerificationCode(
     entity: VerificationCodeEntity,
   ): Promise<void> {
-    this.verificationCodes.set(entity.identifier, entity);
+    this.verificationCodes.set(
+      this.buildVerificationCodeKey(entity.identifier, entity.purpose),
+      entity,
+    );
   }
 
   override async createUser(params: {
     identifier: string;
     nickname: string;
     handle: string;
+    passwordHash?: string | null;
+    passwordUpdatedAt?: Date | null;
   }): Promise<AuthUserEntity> {
     const now = new Date();
     const user: AuthUserEntity = {
@@ -56,6 +77,8 @@ export class InMemoryAuthRepository extends AuthRepository {
       identifier: params.identifier,
       nickname: params.nickname,
       handle: params.handle,
+      passwordHash: params.passwordHash ?? null,
+      passwordUpdatedAt: params.passwordUpdatedAt ?? null,
       avatarUrl: null,
       discoveryMode: 'public',
       createdAt: now,
@@ -181,5 +204,12 @@ export class InMemoryAuthRepository extends AuthRepository {
     session.revokedAt = new Date();
     this.sessionsById.set(session.id, session);
     return session;
+  }
+
+  private buildVerificationCodeKey(
+    identifier: string,
+    purpose: VerificationCodePurpose,
+  ): string {
+    return `${identifier}:${purpose}`;
   }
 }

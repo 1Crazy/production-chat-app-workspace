@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:production_chat_app/features/auth/application/auth_scope.dart';
+import 'package:production_chat_app/features/auth/domain/entities/auth_code_purpose.dart';
 import 'package:production_chat_app/shared/widgets/status_surfaces.dart';
+
+enum _AuthPageMode { login, register, resetPassword }
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -12,16 +15,23 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   late final TextEditingController _identifierController;
   late final TextEditingController _nicknameController;
+  late final TextEditingController _passwordController;
   late final TextEditingController _codeController;
   late final TextEditingController _deviceNameController;
-  bool _isRegisterMode = false;
+
+  _AuthPageMode _pageMode = _AuthPageMode.login;
   bool _rememberLogin = true;
+
+  bool get _requiresCode => _pageMode != _AuthPageMode.login;
+  bool get _showsNickname => _pageMode == _AuthPageMode.register;
+  bool get _showsDeviceName => _pageMode != _AuthPageMode.resetPassword;
 
   @override
   void initState() {
     super.initState();
     _identifierController = TextEditingController();
     _nicknameController = TextEditingController();
+    _passwordController = TextEditingController();
     _codeController = TextEditingController();
     _deviceNameController = TextEditingController();
   }
@@ -30,6 +40,7 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _identifierController.dispose();
     _nicknameController.dispose();
+    _passwordController.dispose();
     _codeController.dispose();
     _deviceNameController.dispose();
     super.dispose();
@@ -42,8 +53,6 @@ class _LoginPageState extends State<LoginPage> {
     return AnimatedBuilder(
       animation: authController,
       builder: (context, child) {
-        final latestCodeReceipt = authController.latestCodeReceipt;
-
         return Scaffold(
           backgroundColor: const Color(0xFFF7F8FC),
           body: SafeArea(
@@ -52,7 +61,7 @@ class _LoginPageState extends State<LoginPage> {
               children: [
                 const SizedBox(height: 8),
                 Text(
-                  _isRegisterMode ? '注册' : '登录',
+                  _titleForMode(),
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
@@ -61,34 +70,27 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  _isRegisterMode ? '创建一个新的账号' : '欢迎回来',
+                  _subtitleForMode(),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: const Color(0xFF98A2B3),
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '当前版本使用验证码登录，不使用密码。',
+                  _hintForMode(),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: const Color(0xFF98A2B3),
                   ),
                 ),
                 const SizedBox(height: 24),
-                _ModeSwitch(
-                  isRegisterMode: _isRegisterMode,
-                  onChanged: (value) {
-                    setState(() {
-                      _isRegisterMode = value;
-                    });
-                  },
-                ),
+                _ModeSwitch(currentMode: _pageMode, onChanged: _setPageMode),
                 const SizedBox(height: 20),
                 _AuthField(
                   controller: _identifierController,
                   label: '账号',
                   hintText: '请输入账号或邮箱',
                 ),
-                if (_isRegisterMode) ...[
+                if (_showsNickname) ...[
                   const SizedBox(height: 14),
                   _AuthField(
                     controller: _nicknameController,
@@ -97,89 +99,116 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ],
                 const SizedBox(height: 14),
-                _CodeField(
-                  controller: _codeController,
-                  onRequestCode: authController.isBusy
-                      ? null
-                      : () async {
-                          await authController.requestCode(
-                            identifier: _identifierController.text.trim(),
-                          );
-                          final receipt = authController.latestCodeReceipt;
-
-                          if (!context.mounted || receipt == null) {
-                            return;
-                          }
-
-                          _codeController.text = receipt.debugCode;
-                          showAppStatusSnackBar(
-                            context,
-                            message: '测试验证码：${receipt.debugCode}',
-                            tone: AppStatusTone.success,
-                          );
-                        },
-                ),
-                const SizedBox(height: 14),
                 _AuthField(
-                  controller: _deviceNameController,
-                  label: '设备备注（选填）',
-                  hintText: '例如 我的 iPhone',
+                  controller: _passwordController,
+                  label: _pageMode == _AuthPageMode.resetPassword
+                      ? '新密码'
+                      : '密码',
+                  hintText: '请输入至少 8 位且包含字母和数字的密码',
+                  obscureText: true,
                 ),
+                if (_requiresCode) ...[
+                  const SizedBox(height: 14),
+                  _CodeField(
+                    controller: _codeController,
+                    onRequestCode: authController.isBusy
+                        ? null
+                        : () async {
+                            final passwordValidationMessage =
+                                _validatePasswordForCodeRequest();
+
+                            if (passwordValidationMessage != null) {
+                              showAppStatusSnackBar(
+                                context,
+                                message: passwordValidationMessage,
+                                tone: AppStatusTone.error,
+                              );
+                              return;
+                            }
+
+                            await authController.requestCode(
+                              identifier: _identifierController.text.trim(),
+                              purpose: _requestPurposeForMode(),
+                            );
+                            final receipt = authController.latestCodeReceipt;
+
+                            if (!context.mounted || receipt == null) {
+                              return;
+                            }
+
+                            _codeController.text = receipt.debugCode;
+                            showAppStatusSnackBar(
+                              context,
+                              message:
+                                  '测试${receipt.purpose.label}验证码：${receipt.debugCode}',
+                              tone: AppStatusTone.success,
+                            );
+                          },
+                  ),
+                ],
+                if (_showsDeviceName) ...[
+                  const SizedBox(height: 14),
+                  _AuthField(
+                    controller: _deviceNameController,
+                    label: '设备备注（选填）',
+                    hintText: '例如 我的 iPhone',
+                  ),
+                ],
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: CheckboxListTile(
-                        value: _rememberLogin,
-                        onChanged: (value) {
-                          setState(() {
-                            _rememberLogin = value ?? true;
-                          });
-                        },
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(
-                          '记住登录',
-                          style: Theme.of(context).textTheme.bodySmall,
+                if (_pageMode != _AuthPageMode.resetPassword)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CheckboxListTile(
+                          value: _rememberLogin,
+                          onChanged: (value) {
+                            setState(() {
+                              _rememberLogin = value ?? true;
+                            });
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(
+                            '记住登录',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ),
                       ),
+                      TextButton(
+                        onPressed: authController.isBusy
+                            ? null
+                            : () {
+                                _setPageMode(_AuthPageMode.resetPassword);
+                              },
+                        child: const Text('忘记密码？'),
+                      ),
+                    ],
+                  ),
+                if (_pageMode == _AuthPageMode.resetPassword)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: authController.isBusy
+                          ? null
+                          : () {
+                              _setPageMode(_AuthPageMode.login);
+                            },
+                      child: const Text('返回密码登录'),
                     ),
-                    TextButton(onPressed: () {}, child: const Text('收不到验证码？')),
-                  ],
+                  ),
+                Text(
+                  '密码要求：8 到 72 位，且必须同时包含字母和数字。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF98A2B3),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: authController.isBusy
-                        ? null
-                        : () async {
-                            if (_isRegisterMode) {
-                              await authController.register(
-                                identifier: _identifierController.text.trim(),
-                                code: _codeController.text.trim(),
-                                nickname: _nicknameController.text.trim(),
-                                deviceName:
-                                    _deviceNameController.text.trim().isEmpty
-                                    ? null
-                                    : _deviceNameController.text.trim(),
-                              );
-                              return;
-                            }
-
-                            await authController.login(
-                              identifier: _identifierController.text.trim(),
-                              code: _codeController.text.trim(),
-                              deviceName:
-                                  _deviceNameController.text.trim().isEmpty
-                                  ? null
-                                  : _deviceNameController.text.trim(),
-                            );
-                          },
+                    onPressed: authController.isBusy ? null : _submit,
                     child: Text(
-                      authController.isBusy
-                          ? '提交中...'
-                          : (_isRegisterMode ? '注册' : '登录'),
+                      authController.isBusy ? '提交中...' : _primaryButtonLabel(),
                     ),
                   ),
                 ),
@@ -196,60 +225,44 @@ class _LoginPageState extends State<LoginPage> {
                       tone: AppStatusTone.error,
                     ),
                   ),
-                const SizedBox(height: 26),
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Divider(color: Color(0xFFE5E7EB), endIndent: 12),
-                    ),
-                    Text(
-                      '其他方式',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF98A2B3),
+                if (_pageMode != _AuthPageMode.resetPassword) ...[
+                  const SizedBox(height: 26),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Divider(color: Color(0xFFE5E7EB), endIndent: 12),
                       ),
-                    ),
-                    const Expanded(
-                      child: Divider(color: Color(0xFFE5E7EB), indent: 12),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _SocialEntry(icon: Icons.wechat_rounded),
-                    SizedBox(width: 28),
-                    _SocialEntry(icon: Icons.apple_rounded),
-                    SizedBox(width: 28),
-                    _SocialEntry(icon: Icons.chat_bubble_rounded),
-                  ],
-                ),
-                const SizedBox(height: 22),
+                      Text(
+                        '其他方式',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF98A2B3),
+                        ),
+                      ),
+                      const Expanded(
+                        child: Divider(color: Color(0xFFE5E7EB), indent: 12),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _SocialEntry(icon: Icons.wechat_rounded),
+                      SizedBox(width: 28),
+                      _SocialEntry(icon: Icons.apple_rounded),
+                      SizedBox(width: 28),
+                      _SocialEntry(icon: Icons.chat_bubble_rounded),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                ] else
+                  const SizedBox(height: 22),
                 Center(
                   child: TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _isRegisterMode = !_isRegisterMode;
-                      });
-                    },
-                    child: Text(_isRegisterMode ? '已有账号，去登录' : '没有账号，去注册'),
+                    onPressed: authController.isBusy ? null : _toggleFooterMode,
+                    child: Text(_footerButtonLabel()),
                   ),
                 ),
-                if (latestCodeReceipt != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFFFFF),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFF0F2F7)),
-                    ),
-                    child: Text(
-                      '最近一次验证码：${latestCodeReceipt.debugCode}，有效期 ${latestCodeReceipt.expiresInSeconds} 秒',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -257,16 +270,178 @@ class _LoginPageState extends State<LoginPage> {
       },
     );
   }
+
+  void _setPageMode(_AuthPageMode mode) {
+    setState(() {
+      _pageMode = mode;
+      _identifierController.clear();
+      _nicknameController.clear();
+      _passwordController.clear();
+      _codeController.clear();
+      _deviceNameController.clear();
+    });
+  }
+
+  Future<void> _submit() async {
+    final authController = AuthScope.of(context);
+    final identifier = _identifierController.text.trim();
+    final password = _passwordController.text;
+    final code = _codeController.text.trim();
+    final deviceName = _deviceNameController.text.trim().isEmpty
+        ? null
+        : _deviceNameController.text.trim();
+
+    switch (_pageMode) {
+      case _AuthPageMode.login:
+        await authController.login(
+          identifier: identifier,
+          password: password,
+          deviceName: deviceName,
+        );
+        return;
+      case _AuthPageMode.register:
+        await authController.register(
+          identifier: identifier,
+          code: code,
+          password: password,
+          nickname: _nicknameController.text.trim(),
+          deviceName: deviceName,
+        );
+        return;
+      case _AuthPageMode.resetPassword:
+        await authController.resetPassword(
+          identifier: identifier,
+          code: code,
+          password: password,
+        );
+        if (!mounted || authController.errorMessage != null) {
+          return;
+        }
+        showAppStatusSnackBar(
+          context,
+          message: '密码已重置，请使用新密码登录',
+          tone: AppStatusTone.success,
+        );
+        _setPageMode(_AuthPageMode.login);
+        return;
+    }
+  }
+
+  AuthCodePurpose _requestPurposeForMode() {
+    switch (_pageMode) {
+      case _AuthPageMode.login:
+        return AuthCodePurpose.register;
+      case _AuthPageMode.register:
+        return AuthCodePurpose.register;
+      case _AuthPageMode.resetPassword:
+        return AuthCodePurpose.resetPassword;
+    }
+  }
+
+  String? _validatePasswordForCodeRequest() {
+    if (!_requiresCode) {
+      return null;
+    }
+
+    final password = _passwordController.text;
+
+    if (password.length < 8) {
+      return '请先输入至少 8 位的密码，再获取验证码';
+    }
+
+    if (password.length > 72) {
+      return '请先把密码控制在 72 位以内，再获取验证码';
+    }
+
+    if (!RegExp(r'[A-Za-z]').hasMatch(password) ||
+        !RegExp(r'\d').hasMatch(password)) {
+      return '请先输入同时包含字母和数字的密码，再获取验证码';
+    }
+
+    return null;
+  }
+
+  String _titleForMode() {
+    switch (_pageMode) {
+      case _AuthPageMode.login:
+        return '登录';
+      case _AuthPageMode.register:
+        return '注册';
+      case _AuthPageMode.resetPassword:
+        return '重置密码';
+    }
+  }
+
+  String _subtitleForMode() {
+    switch (_pageMode) {
+      case _AuthPageMode.login:
+        return '欢迎回来';
+      case _AuthPageMode.register:
+        return '创建一个新的账号';
+      case _AuthPageMode.resetPassword:
+        return '通过验证码验证身份后设置新密码';
+    }
+  }
+
+  String _hintForMode() {
+    switch (_pageMode) {
+      case _AuthPageMode.login:
+        return '当前版本默认使用账号和密码登录。';
+      case _AuthPageMode.register:
+        return '注册时需要验证码校验，并为账号设置初始密码。';
+      case _AuthPageMode.resetPassword:
+        return '如果旧账号还没设置密码，也请走这个入口补密码。';
+    }
+  }
+
+  String _primaryButtonLabel() {
+    switch (_pageMode) {
+      case _AuthPageMode.login:
+        return '登录';
+      case _AuthPageMode.register:
+        return '注册';
+      case _AuthPageMode.resetPassword:
+        return '确认重置密码';
+    }
+  }
+
+  String _footerButtonLabel() {
+    switch (_pageMode) {
+      case _AuthPageMode.login:
+        return '没有账号，去注册';
+      case _AuthPageMode.register:
+        return '已有账号，去登录';
+      case _AuthPageMode.resetPassword:
+        return '没有账号，去注册';
+    }
+  }
+
+  void _toggleFooterMode() {
+    switch (_pageMode) {
+      case _AuthPageMode.login:
+        _setPageMode(_AuthPageMode.register);
+        return;
+      case _AuthPageMode.register:
+        _setPageMode(_AuthPageMode.login);
+        return;
+      case _AuthPageMode.resetPassword:
+        _setPageMode(_AuthPageMode.register);
+        return;
+    }
+  }
 }
 
 class _ModeSwitch extends StatelessWidget {
-  const _ModeSwitch({required this.isRegisterMode, required this.onChanged});
+  const _ModeSwitch({required this.currentMode, required this.onChanged});
 
-  final bool isRegisterMode;
-  final ValueChanged<bool> onChanged;
+  final _AuthPageMode currentMode;
+  final ValueChanged<_AuthPageMode> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final loginSelected = currentMode != _AuthPageMode.register;
+    final registerSelected = currentMode == _AuthPageMode.register;
+
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -278,19 +453,19 @@ class _ModeSwitch extends StatelessWidget {
         children: [
           Expanded(
             child: _ModeButton(
-              label: '登录',
-              selected: !isRegisterMode,
+              label: currentMode == _AuthPageMode.resetPassword ? '重置密码' : '登录',
+              selected: loginSelected,
               onTap: () {
-                onChanged(false);
+                onChanged(_AuthPageMode.login);
               },
             ),
           ),
           Expanded(
             child: _ModeButton(
               label: '注册',
-              selected: isRegisterMode,
+              selected: registerSelected,
               onTap: () {
-                onChanged(true);
+                onChanged(_AuthPageMode.register);
               },
             ),
           ),
@@ -339,16 +514,19 @@ class _AuthField extends StatelessWidget {
     required this.controller,
     required this.label,
     required this.hintText,
+    this.obscureText = false,
   });
 
   final TextEditingController controller;
   final String label;
   final String hintText;
+  final bool obscureText;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      obscureText: obscureText,
       decoration: InputDecoration(labelText: label, hintText: hintText),
     );
   }
