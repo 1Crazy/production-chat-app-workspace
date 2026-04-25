@@ -4,6 +4,7 @@ import { AuthController } from './controllers/auth.controller';
 import { AccessTokenGuard } from './guards/access-token.guard';
 import { AuthRepository } from './repositories/auth.repository';
 import { PrismaAuthRepository } from './repositories/prisma-auth.repository';
+import { AuthCodeDeliveryService } from './services/auth-code-delivery.service';
 import { AuthIdentityService } from './services/auth-identity.service';
 import { AuthPasswordService } from './services/auth-password.service';
 import { AuthRateLimitService } from './services/auth-rate-limit.service';
@@ -24,6 +25,7 @@ import { RealtimeModule } from '@app/modules/realtime/realtime.module';
     AuthTokenService,
     AuthPasswordService,
     AuthIdentityService,
+    AuthCodeDeliveryService,
     AuthRateLimitService,
     AuthSessionService,
     AuthVerificationCodeService,

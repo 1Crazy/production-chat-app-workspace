@@ -15,6 +15,7 @@ import type { VerificationCodePurpose } from '../entities/verification-code.enti
 import { AuthRepository } from '../repositories/auth.repository';
 import type { AuthenticatedRequest } from '../types/authenticated-request.type';
 
+import { AuthCodeDeliveryService } from './auth-code-delivery.service';
 import { AuthPasswordService } from './auth-password.service';
 import { AuthRateLimitService } from './auth-rate-limit.service';
 import { AuthSessionService } from './auth-session.service';
@@ -30,6 +31,7 @@ export class AuthService {
     private readonly authSessionService: AuthSessionService,
     private readonly authVerificationCodeService: AuthVerificationCodeService,
     private readonly authRateLimitService: AuthRateLimitService,
+    private readonly authCodeDeliveryService: AuthCodeDeliveryService,
     private readonly appConfigService: AppConfigService,
   ) {}
 
@@ -46,7 +48,7 @@ export class AuthService {
   ): Promise<{
     identifier: string;
     purpose: VerificationCodePurpose;
-    debugCode: string;
+    debugCode?: string;
     expiresInSeconds: number;
   }> {
     const normalizedIdentifier = dto.identifier.trim().toLowerCase();
@@ -64,11 +66,21 @@ export class AuthService {
       identifier: normalizedIdentifier,
       purpose,
     });
+    await this.authCodeDeliveryService.deliverVerificationCode({
+      identifier: normalizedIdentifier,
+      purpose,
+      code: issuedCode.debugCode,
+      expiresInSeconds: issuedCode.expiresInSeconds,
+    });
 
     return {
       identifier: normalizedIdentifier,
       purpose,
-      debugCode: issuedCode.debugCode,
+      ...(this.authCodeDeliveryService.shouldExposeDebugCode()
+        ? {
+            debugCode: issuedCode.debugCode,
+          }
+        : {}),
       expiresInSeconds: issuedCode.expiresInSeconds,
     };
   }

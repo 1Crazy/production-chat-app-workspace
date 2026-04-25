@@ -92,6 +92,34 @@ export class AppConfigService {
       .filter((handle) => handle.length > 0);
   }
 
+  get authDebugCodeEnabled(): boolean {
+    return this.getOrThrow('authDebugCodeEnabled');
+  }
+
+  get authCodeDeliveryMode(): 'debug' | 'webhook' {
+    return this.getOrThrow('authCodeDeliveryMode');
+  }
+
+  get authCodeWebhookUrl(): string | undefined {
+    return this.getOptional('authCodeWebhookUrl');
+  }
+
+  get authCodeWebhookSecret(): string | undefined {
+    return this.getOptional('authCodeWebhookSecret');
+  }
+
+  get authCodeEmailFrom(): string | undefined {
+    return this.getOptional('authCodeEmailFrom');
+  }
+
+  get authCodeEmailNickname(): string | undefined {
+    return this.getOptional('authCodeEmailNickname');
+  }
+
+  get authCodeEmailHandle(): string | undefined {
+    return this.getOptional('authCodeEmailHandle');
+  }
+
   get authRateLimitEnabled(): boolean {
     return this.getOrThrow('authRateLimitEnabled');
   }

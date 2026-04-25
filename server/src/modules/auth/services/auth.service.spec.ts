@@ -1,5 +1,6 @@
 import { InMemoryAuthRepository } from '../repositories/in-memory-auth.repository';
 
+import { AuthCodeDeliveryService } from './auth-code-delivery.service';
 import { AuthPasswordService } from './auth-password.service';
 import { AuthRateLimitService } from './auth-rate-limit.service';
 import { AuthSessionService } from './auth-session.service';
@@ -12,46 +13,69 @@ import type { AppConfigService } from '@app/infra/config/app-config.service';
 import type { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 
 describe('AuthService', () => {
-  function createFixture() {
+  type TestAppConfig = Pick<
+    AppConfigService,
+    | 'jwtAccessSecret'
+    | 'jwtRefreshSecret'
+    | 'nodeEnv'
+    | 'authDebugCodeEnabled'
+    | 'authCodeDeliveryMode'
+    | 'authCodeWebhookUrl'
+    | 'authCodeWebhookSecret'
+    | 'authCodeEmailFrom'
+    | 'authCodeEmailNickname'
+    | 'authCodeEmailHandle'
+    | 'authRateLimitEnabled'
+    | 'authRateLimitWindowMinutes'
+    | 'authRequestCodeSourceLimit'
+    | 'authRequestCodeIdentifierLimit'
+    | 'authRegisterSourceLimit'
+    | 'authRegisterIdentifierLimit'
+    | 'authLoginSourceLimit'
+    | 'authLoginIdentifierLimit'
+    | 'authResetPasswordSourceLimit'
+    | 'authResetPasswordIdentifierLimit'
+  >;
+
+  function buildAppConfig(
+    overrides: Partial<TestAppConfig> = {},
+  ): AppConfigService {
+    return {
+      jwtAccessSecret: 'access-secret',
+      jwtRefreshSecret: 'refresh-secret',
+      nodeEnv: 'test',
+      authDebugCodeEnabled: true,
+      authCodeDeliveryMode: 'debug',
+      authCodeWebhookUrl: undefined,
+      authCodeWebhookSecret: undefined,
+      authCodeEmailFrom: undefined,
+      authCodeEmailNickname: undefined,
+      authCodeEmailHandle: undefined,
+      authRateLimitEnabled: true,
+      authRateLimitWindowMinutes: 10,
+      authRequestCodeSourceLimit: 6,
+      authRequestCodeIdentifierLimit: 3,
+      authRegisterSourceLimit: 5,
+      authRegisterIdentifierLimit: 3,
+      authLoginSourceLimit: 10,
+      authLoginIdentifierLimit: 5,
+      authResetPasswordSourceLimit: 5,
+      authResetPasswordIdentifierLimit: 3,
+      ...overrides,
+    } as AppConfigService;
+  }
+
+  function requireDebugCode(response: { debugCode?: string }): string {
+    if (!response.debugCode) {
+      throw new Error('expected test fixture to expose debugCode');
+    }
+
+    return response.debugCode;
+  }
+
+  function createFixture(configOverrides: Partial<TestAppConfig> = {}) {
     const authRepository = new InMemoryAuthRepository();
-    const appConfig = {
-      get jwtAccessSecret() {
-        return 'access-secret';
-      },
-      get jwtRefreshSecret() {
-        return 'refresh-secret';
-      },
-      get authRateLimitEnabled() {
-        return true;
-      },
-      get authRateLimitWindowMinutes() {
-        return 10;
-      },
-      get authRequestCodeSourceLimit() {
-        return 6;
-      },
-      get authRequestCodeIdentifierLimit() {
-        return 3;
-      },
-      get authRegisterSourceLimit() {
-        return 5;
-      },
-      get authRegisterIdentifierLimit() {
-        return 3;
-      },
-      get authLoginSourceLimit() {
-        return 10;
-      },
-      get authLoginIdentifierLimit() {
-        return 5;
-      },
-      get authResetPasswordSourceLimit() {
-        return 5;
-      },
-      get authResetPasswordIdentifierLimit() {
-        return 3;
-      },
-    } as unknown as AppConfigService;
+    const appConfig = buildAppConfig(configOverrides);
     const authTokenService = new AuthTokenService(appConfig);
     const chatGateway = {
       disconnectSession: jest.fn(),
@@ -72,12 +96,14 @@ describe('AuthService', () => {
       appConfig,
       rateLimitService,
     );
+    const authCodeDeliveryService = new AuthCodeDeliveryService(appConfig);
     const service = new AuthService(
       authRepository,
       authPasswordService,
       authSessionService,
       authVerificationCodeService,
       authRateLimitService,
+      authCodeDeliveryService,
       appConfig,
     );
 
@@ -99,7 +125,7 @@ describe('AuthService', () => {
     });
     await fixture.service.register({
       identifier: firstIdentifier,
-      code: firstCode.debugCode,
+      code: requireDebugCode(firstCode),
       password: 'Alice1234',
       nickname: 'Alice',
       deviceName: 'alice-phone',
@@ -111,7 +137,7 @@ describe('AuthService', () => {
     });
     const secondRegistration = await fixture.service.register({
       identifier: secondIdentifier,
-      code: secondCode.debugCode,
+      code: requireDebugCode(secondCode),
       password: 'Alice5678',
       nickname: 'Alice Clone',
       deviceName: 'clone-phone',
@@ -142,59 +168,83 @@ describe('AuthService', () => {
   });
 
   it('should skip auth rate limiting when disabled by env config', async () => {
-    const authRepository = new InMemoryAuthRepository();
-    const appConfig = {
-      jwtAccessSecret: 'access-secret',
-      jwtRefreshSecret: 'refresh-secret',
+    const fixture = createFixture({
       authRateLimitEnabled: false,
-      authRateLimitWindowMinutes: 10,
-      authRequestCodeSourceLimit: 6,
-      authRequestCodeIdentifierLimit: 3,
-      authRegisterSourceLimit: 5,
-      authRegisterIdentifierLimit: 3,
-      authLoginSourceLimit: 10,
-      authLoginIdentifierLimit: 5,
-      authResetPasswordSourceLimit: 5,
-      authResetPasswordIdentifierLimit: 3,
-    } as AppConfigService;
-    const authTokenService = new AuthTokenService(appConfig);
-    const authPasswordService = new AuthPasswordService();
-    const chatGateway = {
-      disconnectSession: jest.fn(),
-    } as unknown as ChatGateway;
-    const rateLimitService = {
-      consumeOrThrow: jest.fn(),
-    } as unknown as RateLimitService;
-    const authSessionService = new AuthSessionService(
-      authRepository,
-      authTokenService,
-      chatGateway,
-    );
-    const authVerificationCodeService = new AuthVerificationCodeService(
-      authRepository,
-    );
-    const authRateLimitService = new AuthRateLimitService(
-      appConfig,
-      rateLimitService,
-    );
-    const service = new AuthService(
-      authRepository,
-      authPasswordService,
-      authSessionService,
-      authVerificationCodeService,
-      authRateLimitService,
-      appConfig,
-    );
+    });
 
-    await service.requestCode({
+    await fixture.service.requestCode({
       identifier: 'alice@example.com',
       purpose: 'register',
     });
 
     expect(
-      (rateLimitService as unknown as { consumeOrThrow: jest.Mock })
+      (fixture.rateLimitService as unknown as { consumeOrThrow: jest.Mock })
         .consumeOrThrow,
     ).not.toHaveBeenCalled();
+  });
+
+  it('should not expose debug codes in production responses', async () => {
+    const fixture = createFixture({
+      nodeEnv: 'production',
+      authDebugCodeEnabled: true,
+      authCodeDeliveryMode: 'debug',
+      authRateLimitEnabled: false,
+    });
+
+    await expect(
+      fixture.service.requestCode({
+        identifier: 'alice@example.com',
+        purpose: 'register',
+      }),
+    ).resolves.not.toHaveProperty('debugCode');
+  });
+
+  it('should deliver production codes through the configured webhook', async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue({ ok: true } as Response);
+    const fixture = createFixture({
+      nodeEnv: 'production',
+      authDebugCodeEnabled: false,
+      authCodeDeliveryMode: 'webhook',
+      authCodeWebhookUrl: 'https://code-provider.example/send',
+      authCodeWebhookSecret: 'delivery-secret',
+      authCodeEmailFrom: 'no-reply@example.com',
+      authCodeEmailNickname: 'Production Chat',
+      authCodeEmailHandle: 'production_chat',
+      authRateLimitEnabled: false,
+    });
+
+    await fixture.service.requestCode({
+      identifier: 'Alice@Example.com',
+      purpose: 'reset-password',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://code-provider.example/send',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer delivery-secret',
+        },
+      }),
+    );
+    const [, request] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(String((request as RequestInit).body));
+    expect(body).toMatchObject({
+      identifier: 'alice@example.com',
+      purpose: 'reset-password',
+      expiresInSeconds: 600,
+      sender: {
+        email: 'no-reply@example.com',
+        nickname: 'Production Chat',
+        handle: 'production_chat',
+      },
+    });
+    expect(body.code).toMatch(/^\d{6}$/);
+
+    fetchMock.mockRestore();
   });
 
   it('should require a password reset before legacy code-only accounts can login', async () => {
@@ -205,7 +255,7 @@ describe('AuthService', () => {
     });
     const registration = await fixture.service.register({
       identifier: 'alice@example.com',
-      code: code.debugCode,
+      code: requireDebugCode(code),
       password: 'Alice1234',
       nickname: 'Alice',
       deviceName: 'alice-phone',

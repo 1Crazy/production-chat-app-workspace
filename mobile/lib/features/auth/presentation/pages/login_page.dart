@@ -136,11 +136,17 @@ class _LoginPageState extends State<LoginPage> {
                               return;
                             }
 
-                            _codeController.text = receipt.debugCode;
+                            final debugCode = receipt.debugCode;
+
+                            if (debugCode != null && debugCode.isNotEmpty) {
+                              _codeController.text = debugCode;
+                            }
+
                             showAppStatusSnackBar(
                               context,
-                              message:
-                                  '测试${receipt.purpose.label}验证码：${receipt.debugCode}',
+                              message: debugCode == null || debugCode.isEmpty
+                                  ? '${receipt.purpose.label}验证码已发送'
+                                  : '测试${receipt.purpose.label}验证码：$debugCode',
                               tone: AppStatusTone.success,
                             );
                           },

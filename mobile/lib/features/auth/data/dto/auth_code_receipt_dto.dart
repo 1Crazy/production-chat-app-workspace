@@ -5,7 +5,7 @@ class AuthCodeReceiptDto {
   const AuthCodeReceiptDto({
     required this.identifier,
     required this.purpose,
-    required this.debugCode,
+    this.debugCode,
     required this.expiresInSeconds,
   });
 
@@ -15,14 +15,14 @@ class AuthCodeReceiptDto {
       purpose: AuthCodePurposeX.fromWireValue(
         json['purpose']?.toString() ?? 'register',
       ),
-      debugCode: json['debugCode']?.toString() ?? '',
+      debugCode: json['debugCode']?.toString(),
       expiresInSeconds: (json['expiresInSeconds'] as num?)?.toInt() ?? 0,
     );
   }
 
   final String identifier;
   final AuthCodePurpose purpose;
-  final String debugCode;
+  final String? debugCode;
   final int expiresInSeconds;
 
   AuthCodeReceipt toEntity() {

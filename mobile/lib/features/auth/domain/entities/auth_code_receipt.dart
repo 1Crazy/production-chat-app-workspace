@@ -4,12 +4,12 @@ class AuthCodeReceipt {
   const AuthCodeReceipt({
     required this.identifier,
     required this.purpose,
-    required this.debugCode,
+    this.debugCode,
     required this.expiresInSeconds,
   });
 
   final String identifier;
   final AuthCodePurpose purpose;
-  final String debugCode;
+  final String? debugCode;
   final int expiresInSeconds;
 }

@@ -43,6 +43,34 @@ void main() {
     expect(find.text('测试注册验证码：246810'), findsOneWidget);
   });
 
+  testWidgets(
+    'login page does not autofill code when backend hides debug code',
+    (tester) async {
+      final authRepository = _FakeAuthRepository(debugCode: null);
+      final controller = AuthController(
+        authRepository: authRepository,
+        pushRegistrationService: _FakePushRegistrationService(),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AuthScope(controller: controller, child: const LoginPage()),
+        ),
+      );
+
+      await tester.tap(find.text('注册'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(find.byType(TextField).at(0), 'demo_user');
+      await tester.enterText(find.byType(TextField).at(2), 'Demo12345');
+      await tester.tap(find.text('获取验证码'));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(authRepository.requestedIdentifiers, ['demo_user']);
+      expect(find.text('注册验证码已发送'), findsOneWidget);
+      expect(find.text('测试注册验证码：246810'), findsNothing);
+    },
+  );
+
   testWidgets('login page shows repository errors from login attempts', (
     tester,
   ) async {
@@ -155,9 +183,10 @@ void main() {
 }
 
 class _FakeAuthRepository implements AuthRepository {
-  _FakeAuthRepository({this.loginError});
+  _FakeAuthRepository({this.loginError, this.debugCode = '246810'});
 
   final Object? loginError;
+  final String? debugCode;
   final List<String> requestedIdentifiers = [];
   final List<AuthCodePurpose> requestedPurposes = [];
   int resetPasswordCalls = 0;
@@ -222,7 +251,7 @@ class _FakeAuthRepository implements AuthRepository {
     return AuthCodeReceipt(
       identifier: 'demo_user',
       purpose: purpose,
-      debugCode: '246810',
+      debugCode: debugCode,
       expiresInSeconds: 600,
     );
   }

@@ -15,6 +15,7 @@ import { ResetPasswordDto } from '@app/modules/auth/dto/reset-password.dto';
 import { AccessTokenGuard } from '@app/modules/auth/guards/access-token.guard';
 import { AuthRepository } from '@app/modules/auth/repositories/auth.repository';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
+import { AuthCodeDeliveryService } from '@app/modules/auth/services/auth-code-delivery.service';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
 import { AuthPasswordService } from '@app/modules/auth/services/auth-password.service';
 import { AuthRateLimitService } from '@app/modules/auth/services/auth-rate-limit.service';
@@ -49,6 +50,7 @@ describe('AuthController integration', () => {
         AuthTokenService,
         AuthPasswordService,
         AuthIdentityService,
+        AuthCodeDeliveryService,
         AuthSessionService,
         AuthVerificationCodeService,
         AuthRateLimitService,
@@ -74,6 +76,21 @@ describe('AuthController integration', () => {
           useValue: {
             jwtAccessSecret: 'access-secret',
             jwtRefreshSecret: 'refresh-secret',
+            nodeEnv: 'test',
+            authDebugCodeEnabled: true,
+            authCodeDeliveryMode: 'debug',
+            authCodeWebhookUrl: undefined,
+            authCodeWebhookSecret: undefined,
+            authRateLimitEnabled: false,
+            authRateLimitWindowMinutes: 10,
+            authRequestCodeSourceLimit: 6,
+            authRequestCodeIdentifierLimit: 3,
+            authRegisterSourceLimit: 5,
+            authRegisterIdentifierLimit: 3,
+            authLoginSourceLimit: 10,
+            authLoginIdentifierLimit: 5,
+            authResetPasswordSourceLimit: 5,
+            authResetPasswordIdentifierLimit: 3,
           },
         },
       ],
@@ -105,6 +122,10 @@ describe('AuthController integration', () => {
       identifier: 'alice_user',
       expiresInSeconds: 600,
     });
+
+    if (!requestCodeResponse.debugCode) {
+      throw new Error('expected integration test to expose debugCode');
+    }
 
     const registerDto = (await validationPipe.transform(
       {
@@ -199,6 +220,10 @@ describe('AuthController integration', () => {
         },
       )) as RequestAuthCodeDto,
     );
+
+    if (!resetCodeResponse.debugCode) {
+      throw new Error('expected integration test to expose reset debugCode');
+    }
 
     const resetPasswordResponse = await controller.resetPassword(
       {

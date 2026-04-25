@@ -18,6 +18,13 @@ export interface AppEnvironment {
   readonly apnsBundleId?: string;
   readonly apnsPrivateKey?: string;
   readonly adminHandles?: string;
+  readonly authDebugCodeEnabled: boolean;
+  readonly authCodeDeliveryMode: 'debug' | 'webhook';
+  readonly authCodeWebhookUrl?: string;
+  readonly authCodeWebhookSecret?: string;
+  readonly authCodeEmailFrom?: string;
+  readonly authCodeEmailNickname?: string;
+  readonly authCodeEmailHandle?: string;
   readonly authRateLimitEnabled: boolean;
   readonly authRateLimitWindowMinutes: number;
   readonly authRequestCodeSourceLimit: number;
@@ -53,9 +60,53 @@ export function validateEnv(
     }
   }
 
+  const nodeEnv = String(rawConfig.NODE_ENV);
+  const authDebugCodeEnabled = readBoolean(
+    rawConfig.AUTH_DEBUG_CODE_ENABLED,
+    nodeEnv !== 'production',
+  );
+  const authCodeDeliveryMode = readAuthCodeDeliveryMode(
+    rawConfig.AUTH_CODE_DELIVERY_MODE,
+    nodeEnv === 'production' ? 'webhook' : 'debug',
+  );
+  const authCodeWebhookUrl = readOptionalString(rawConfig.AUTH_CODE_WEBHOOK_URL);
+  const authCodeEmailFrom = readOptionalString(rawConfig.AUTH_CODE_EMAIL_FROM);
+  const authCodeEmailNickname = readOptionalString(
+    rawConfig.AUTH_CODE_EMAIL_NICKNAME,
+  );
+  const authCodeEmailHandle = readOptionalString(
+    rawConfig.AUTH_CODE_EMAIL_HANDLE,
+  );
+
+  if (nodeEnv === 'production' && authDebugCodeEnabled) {
+    throw new Error('AUTH_DEBUG_CODE_ENABLED must be false in production');
+  }
+
+  if (nodeEnv === 'production' && authCodeDeliveryMode !== 'webhook') {
+    throw new Error('AUTH_CODE_DELIVERY_MODE must be webhook in production');
+  }
+
+  if (authCodeDeliveryMode === 'webhook' && !authCodeWebhookUrl) {
+    throw new Error(
+      'AUTH_CODE_WEBHOOK_URL is required when AUTH_CODE_DELIVERY_MODE=webhook',
+    );
+  }
+
+  if (nodeEnv === 'production' && authCodeDeliveryMode === 'webhook') {
+    for (const [key, value] of [
+      ['AUTH_CODE_EMAIL_FROM', authCodeEmailFrom],
+      ['AUTH_CODE_EMAIL_NICKNAME', authCodeEmailNickname],
+      ['AUTH_CODE_EMAIL_HANDLE', authCodeEmailHandle],
+    ] as const) {
+      if (!value) {
+        throw new Error(`${key} is required in production`);
+      }
+    }
+  }
+
   return {
     appName: String(rawConfig.APP_NAME),
-    nodeEnv: String(rawConfig.NODE_ENV),
+    nodeEnv,
     port: Number(rawConfig.PORT),
     databaseUrl: String(rawConfig.DATABASE_URL),
     redisUrl: String(rawConfig.REDIS_URL),
@@ -73,6 +124,15 @@ export function validateEnv(
     apnsBundleId: readOptionalString(rawConfig.APNS_BUNDLE_ID),
     apnsPrivateKey: readOptionalString(rawConfig.APNS_PRIVATE_KEY),
     adminHandles: readOptionalString(rawConfig.ADMIN_HANDLES),
+    authDebugCodeEnabled,
+    authCodeDeliveryMode,
+    authCodeWebhookUrl,
+    authCodeWebhookSecret: readOptionalString(
+      rawConfig.AUTH_CODE_WEBHOOK_SECRET,
+    ),
+    authCodeEmailFrom,
+    authCodeEmailNickname,
+    authCodeEmailHandle,
     authRateLimitEnabled: readBoolean(rawConfig.AUTH_RATE_LIMIT_ENABLED, true),
     authRateLimitWindowMinutes: readNumber(
       rawConfig.AUTH_RATE_LIMIT_WINDOW_MINUTES,
@@ -108,6 +168,20 @@ export function validateEnv(
       3,
     ),
   };
+}
+
+function readAuthCodeDeliveryMode(
+  value: unknown,
+  fallback: 'debug' | 'webhook',
+): 'debug' | 'webhook' {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'webhook' || normalized === 'debug'
+    ? normalized
+    : fallback;
 }
 
 function readOptionalString(value: unknown): string | undefined {

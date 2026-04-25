@@ -89,6 +89,13 @@ services:
       REDIS_URL: redis://redis:6379/0
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-replace-with-production-access-secret}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-replace-with-production-refresh-secret}
+      AUTH_CODE_DELIVERY_MODE: webhook
+      AUTH_DEBUG_CODE_ENABLED: "false"
+      AUTH_CODE_WEBHOOK_URL: ${AUTH_CODE_WEBHOOK_URL}
+      AUTH_CODE_WEBHOOK_SECRET: ${AUTH_CODE_WEBHOOK_SECRET:-}
+      AUTH_CODE_EMAIL_FROM: ${AUTH_CODE_EMAIL_FROM}
+      AUTH_CODE_EMAIL_NICKNAME: ${AUTH_CODE_EMAIL_NICKNAME}
+      AUTH_CODE_EMAIL_HANDLE: ${AUTH_CODE_EMAIL_HANDLE}
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: ${S3_BUCKET:-chat-production}
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
