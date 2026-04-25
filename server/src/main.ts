@@ -1,3 +1,4 @@
+import helmet from 'helmet';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
@@ -14,10 +15,20 @@ async function bootstrap(): Promise<void> {
 
   app.useLogger(logger);
 
-  // 浏览器调试（含 Flutter Web）需要显式放开 HTTP CORS，
-  // 否则本地 `localhost:*` 页面访问 API 会被浏览器拦截。
+  // 安全响应头：添加 CSP、HSTS、X-Content-Type-Options 等 HTTP 安全头。
+  app.use(helmet());
+
+  // 只允许配置的白名单域名跨域访问，生产环境不应使用通配符。
+  const allowedOrigins = config.corsAllowedOrigins;
+  const corsOrigin =
+    allowedOrigins.length === 1 && allowedOrigins[0] === '*'
+      ? true
+      : allowedOrigins.length > 0
+        ? allowedOrigins
+        : false;
+
   app.enableCors({
-    origin: true,
+    origin: corsOrigin,
     credentials: true,
   });
 

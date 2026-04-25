@@ -2,6 +2,7 @@ export interface AppEnvironment {
   readonly appName: string;
   readonly nodeEnv: string;
   readonly port: number;
+  readonly corsAllowedOrigins: string;
   readonly databaseUrl: string;
   readonly redisUrl: string;
   readonly jwtAccessSecret: string;
@@ -41,6 +42,7 @@ const requiredKeys = [
   'APP_NAME',
   'NODE_ENV',
   'PORT',
+  'CORS_ALLOWED_ORIGINS',
   'DATABASE_URL',
   'REDIS_URL',
   'JWT_ACCESS_SECRET',
@@ -104,10 +106,18 @@ export function validateEnv(
     }
   }
 
+  const corsAllowedOrigins =
+    typeof rawConfig.CORS_ALLOWED_ORIGINS === 'string'
+      ? rawConfig.CORS_ALLOWED_ORIGINS.trim()
+      : nodeEnv === 'production'
+        ? ''
+        : '*';
+
   return {
     appName: String(rawConfig.APP_NAME),
     nodeEnv,
     port: Number(rawConfig.PORT),
+    corsAllowedOrigins,
     databaseUrl: String(rawConfig.DATABASE_URL),
     redisUrl: String(rawConfig.REDIS_URL),
     jwtAccessSecret: String(rawConfig.JWT_ACCESS_SECRET),

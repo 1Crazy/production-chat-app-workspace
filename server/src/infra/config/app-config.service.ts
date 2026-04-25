@@ -19,6 +19,15 @@ export class AppConfigService {
     return this.getOrThrow('port');
   }
 
+  get corsAllowedOrigins(): string[] {
+    // 从环境变量读取逗号分隔的域名白名单，生产环境必须显式配置。
+    const rawValue = this.getOrThrow('corsAllowedOrigins');
+    return rawValue
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0);
+  }
+
   get databaseUrl(): string {
     return this.getOrThrow('databaseUrl');
   }

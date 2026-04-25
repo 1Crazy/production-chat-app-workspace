@@ -11,6 +11,14 @@ export class RateLimitService {
     private readonly riskEventRecorderService: RiskEventRecorderService,
   ) {}
 
+  async reset(params: {
+    scope: string;
+    actorKey: string;
+  }): Promise<void> {
+    const key = this.buildKey(params.scope, params.actorKey);
+    await this.redisService.instance.del(key);
+  }
+
   async consumeOrThrow(params: {
     scope: string;
     actorKey: string;

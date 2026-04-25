@@ -144,11 +144,12 @@ export class AuthService {
     const user = await this.authRepository.findUserByIdentifier(identifier);
 
     if (!user || user.disabledAt) {
-      throw new NotFoundException('账号不存在或已被禁用');
+      // 不区分"用户不存在"和"密码错误"，防止用户枚举攻击
+      throw new UnauthorizedException('账号或密码不匹配');
     }
 
     if (!user.passwordHash) {
-      throw new UnauthorizedException('当前账号尚未设置密码，请先重置密码');
+      throw new UnauthorizedException('账号或密码不匹配');
     }
 
     const passwordMatched = await this.authPasswordService.verifyPassword(
@@ -157,7 +158,7 @@ export class AuthService {
     );
 
     if (!passwordMatched) {
-      throw new UnauthorizedException('账号或密码不正确');
+      throw new UnauthorizedException('账号或密码不匹配');
     }
 
     const session = await this.authSessionService.createSessionForUser({
@@ -185,7 +186,8 @@ export class AuthService {
     const user = await this.authRepository.findUserByIdentifier(identifier);
 
     if (!user || user.disabledAt) {
-      throw new NotFoundException('账号不存在或已被禁用');
+      // 不区分"不存在"和"禁用"，防止用户枚举攻击
+      throw new NotFoundException('账号验证失败');
     }
 
     await this.authVerificationCodeService.assertVerificationCode(

@@ -16,7 +16,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(appConfigService: AppConfigService) {
     this.client = new Redis(appConfigService.redisUrl, {
       lazyConnect: true,
-      maxRetriesPerRequest: null,
+      // 单个命令最多重试 20 次，防止 Redis 不可用时请求永久挂起。
+      maxRetriesPerRequest: 20,
       enableReadyCheck: true,
     });
     this.client.on('ready', () => {

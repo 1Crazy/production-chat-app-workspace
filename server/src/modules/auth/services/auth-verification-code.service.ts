@@ -1,13 +1,22 @@
+import { randomInt } from 'node:crypto';
+
 import { BadRequestException, Injectable } from '@nestjs/common';
 
 import type { VerificationCodePurpose } from '../entities/verification-code.entity';
 import { AuthRepository } from '../repositories/auth.repository';
 
+import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
+
 @Injectable()
 export class AuthVerificationCodeService {
   private readonly verificationCodeTtlSeconds = 60 * 10;
+  // 验证码输入最大重试次数，超过后需重新获取。
+  private readonly maxVerifyAttempts = 5;
 
-  constructor(private readonly authRepository: AuthRepository) {}
+  constructor(
+    private readonly authRepository: AuthRepository,
+    private readonly rateLimitService: RateLimitService,
+  ) {}
 
   async issueCode(params: {
     identifier: string;
@@ -28,6 +37,12 @@ export class AuthVerificationCodeService {
       expiresAt,
     );
 
+    // 新验证码签发时重置之前的重试计数器，让用户获得完整的尝试次数。
+    await this.rateLimitService.reset({
+      scope: `auth.assert-code.${params.purpose}`,
+      actorKey: params.identifier,
+    });
+
     return {
       debugCode: verificationCode,
       expiresInSeconds: this.verificationCodeTtlSeconds,
@@ -39,6 +54,16 @@ export class AuthVerificationCodeService {
     purpose: VerificationCodePurpose,
     code: string,
   ): Promise<void> {
+    // 先检查重试限流，防止暴力枚举验证码。
+    // 如果触发限流，在窗口期内不管输入是否正确都会被拒绝。
+    await this.rateLimitService.consumeOrThrow({
+      scope: `auth.assert-code.${purpose}`,
+      actorKey: identifier,
+      limit: this.maxVerifyAttempts,
+      windowMs: this.verificationCodeTtlSeconds * 1000,
+      message: '验证码尝试次数过多，请重新获取',
+    });
+
     const verificationCode = await this.authRepository.findVerificationCode(
       identifier,
       purpose,
@@ -66,7 +91,8 @@ export class AuthVerificationCodeService {
   }
 
   private generateVerificationCode(): string {
-    return `${Math.floor(100000 + Math.random() * 900000)}`;
+    // 使用密码学安全的随机数替代 Math.random，防止预测。
+    return `${randomInt(100000, 1000000)}`;
   }
 
   private getVerificationCodePurposeLabel(

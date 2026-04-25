@@ -51,8 +51,10 @@ import type { MessageView } from '@app/modules/messages/dto/message.dto';
 
 @WebSocketGateway({
   namespace: REALTIME_NAMESPACE,
+  // Flutter 移动端使用 WebSocket 直连，不受浏览器 CORS 限制。
+  // HTTP 长轮询场景下需要允许跨域，但该 namespace 已通过 JWT 鉴权。
   cors: {
-    origin: true,
+    origin: '*',
     credentials: true,
   },
   // 启用 Socket.IO 的断线恢复，让弱网重连时可以恢复房间和 socket data。

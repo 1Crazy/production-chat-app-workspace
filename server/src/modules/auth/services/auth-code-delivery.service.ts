@@ -44,18 +44,20 @@ export class AuthCodeDeliveryService {
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: this.buildWebhookHeaders(),
-      body: JSON.stringify({
-        identifier: params.identifier,
-        purpose: params.purpose,
-        code: params.code,
-        expiresInSeconds: params.expiresInSeconds,
-        sender: {
-          email: this.appConfigService.authCodeEmailFrom,
-          nickname: this.appConfigService.authCodeEmailNickname,
-          handle: this.appConfigService.authCodeEmailHandle,
-        },
-      }),
-    });
+        // 外部 webhook 必须在 10 秒内响应，防止阻塞验证码投递链路。
+        signal: AbortSignal.timeout(10_000),
+        body: JSON.stringify({
+          identifier: params.identifier,
+          purpose: params.purpose,
+          code: params.code,
+          expiresInSeconds: params.expiresInSeconds,
+          sender: {
+            email: this.appConfigService.authCodeEmailFrom,
+            nickname: this.appConfigService.authCodeEmailNickname,
+            handle: this.appConfigService.authCodeEmailHandle,
+          },
+        }),
+      });
 
       if (response.ok) {
         return;

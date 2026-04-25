@@ -91,6 +91,7 @@ describe('AuthService', () => {
     );
     const authVerificationCodeService = new AuthVerificationCodeService(
       authRepository,
+      rateLimitService,
     );
     const authRateLimitService = new AuthRateLimitService(
       appConfig,
@@ -279,6 +280,6 @@ describe('AuthService', () => {
         password: 'Alice1234',
         deviceName: 'alice-ipad',
       }),
-    ).rejects.toThrow('当前账号尚未设置密码，请先重置密码');
+    ).rejects.toThrow('账号或密码不匹配');
   });
 });
