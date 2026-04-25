@@ -1,4 +1,5 @@
 import type { AuthUserEntity } from '@app/modules/auth/entities/auth-user.entity';
+import type { FriendshipRelationshipView } from '@app/modules/friendships/dto/friendship.dto';
 
 export interface UserProfileDto {
   id: string;
@@ -12,6 +13,7 @@ export interface UserProfileDto {
 export interface DiscoverableUserDto {
   discoverable: boolean;
   profile: UserDiscoveryProfileDto | null;
+  relationship: FriendshipRelationshipView;
 }
 
 export interface UserDiscoveryProfileDto {

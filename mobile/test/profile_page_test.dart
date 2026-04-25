@@ -16,12 +16,18 @@ import 'package:production_chat_app/features/chat/domain/entities/chat_history_p
 import 'package:production_chat_app/features/chat/domain/entities/chat_message.dart';
 import 'package:production_chat_app/features/chat/domain/entities/chat_sync_result.dart';
 import 'package:production_chat_app/features/chat/domain/repositories/chat_repository.dart';
+import 'package:production_chat_app/features/contacts/presentation/pages/contacts_page.dart';
 import 'package:production_chat_app/features/conversation/domain/entities/conversation_summary.dart';
 import 'package:production_chat_app/features/conversation/domain/repositories/conversation_repository.dart';
+import 'package:production_chat_app/features/friendship/domain/entities/friend_relationship.dart';
+import 'package:production_chat_app/features/friendship/domain/entities/friend_request_summary.dart';
+import 'package:production_chat_app/features/friendship/domain/entities/friend_summary.dart';
+import 'package:production_chat_app/features/friendship/domain/entities/friend_user_profile.dart';
+import 'package:production_chat_app/features/friendship/domain/entities/friendship_status.dart';
+import 'package:production_chat_app/features/friendship/domain/repositories/friendship_repository.dart';
 import 'package:production_chat_app/features/profile/domain/entities/discoverable_user.dart';
 import 'package:production_chat_app/features/profile/domain/entities/user_profile.dart';
 import 'package:production_chat_app/features/profile/domain/repositories/profile_repository.dart';
-import 'package:production_chat_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:production_chat_app/shared/notifications/app_badge_service.dart';
 import 'package:production_chat_app/shared/network/api_client.dart';
 import 'package:production_chat_app/shared/notifications/notification_remote_data_source.dart';
@@ -32,7 +38,7 @@ import 'package:production_chat_app/shared/realtime/chat_realtime_event.dart';
 
 void main() {
   testWidgets(
-    'profile page can open direct conversation from discovered user',
+    'contacts page can open direct conversation from friend profile',
     (tester) async {
       final authController = AuthController(
         authRepository: _FakeAuthRepository(),
@@ -43,26 +49,27 @@ void main() {
       String? openedHandle;
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: AppDependenciesScope(
-              dependencies: AppDependencies(
-                authRepository: _FakeAuthRepository(),
-                appBadgeService: const AppBadgeService(),
-                chatRepository: _FakeChatRepository(),
-                chatRealtime: _FakeChatRealtime(),
-                conversationRepository: _FakeConversationRepository(),
-                firebaseReady: false,
-                notificationRemoteDataSource: NotificationRemoteDataSource(
-                  apiClient: ApiClient(baseUrl: 'http://localhost:3000'),
-                ),
-                profileRepository: _FakeProfileRepository(),
-                pushNotificationService: const NoopPushNotificationService(),
-                pushRegistrationService: _FakePushRegistrationService(),
-              ),
-              child: AuthScope(
-                controller: authController,
-                child: ProfilePage(
+        AppDependenciesScope(
+          dependencies: AppDependencies(
+            authRepository: _FakeAuthRepository(),
+            appBadgeService: const AppBadgeService(),
+            chatRepository: _FakeChatRepository(),
+            chatRealtime: _FakeChatRealtime(),
+            conversationRepository: _FakeConversationRepository(),
+            firebaseReady: false,
+            friendshipRepository: _FakeFriendshipRepository(),
+            notificationRemoteDataSource: NotificationRemoteDataSource(
+              apiClient: ApiClient(baseUrl: 'http://localhost:3000'),
+            ),
+            profileRepository: _FakeProfileRepository(),
+            pushNotificationService: const NoopPushNotificationService(),
+            pushRegistrationService: _FakePushRegistrationService(),
+          ),
+          child: AuthScope(
+            controller: authController,
+            child: MaterialApp(
+              home: Scaffold(
+                body: ContactsPage(
                   onOpenDirectConversation: (handle) async {
                     openedHandle = handle;
                   },
@@ -74,21 +81,12 @@ void main() {
       );
 
       await tester.pumpAndSettle();
-
-      await tester.drag(find.byType(Scrollable).first, const Offset(0, -600));
+      await tester.tap(find.text('Peer User'));
       await tester.pumpAndSettle();
-
-      await tester.enterText(find.byType(TextField).last, 'peer_user');
-      await tester.tap(find.text('查询联系人'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('@peer_user'), findsOneWidget);
-
-      await tester.tap(find.text('发起/打开单聊'));
+      await tester.tap(find.text('发消息'));
       await tester.pumpAndSettle();
 
       expect(openedHandle, 'peer_user');
-      expect(find.text('已打开单聊'), findsOneWidget);
     },
   );
 }
@@ -218,6 +216,11 @@ class _FakeProfileRepository implements ProfileRepository {
         handle: 'peer_user',
         avatarUrl: null,
       ),
+      relationship: FriendRelationship(
+        status: FriendshipStatus.friends,
+        pendingRequestId: null,
+        canMessage: true,
+      ),
     );
   }
 
@@ -249,6 +252,83 @@ class _FakeProfileRepository implements ProfileRepository {
       discoveryMode: discoveryMode,
     );
   }
+}
+
+class _FakeFriendshipRepository implements FriendshipRepository {
+  @override
+  Future<void> acceptFriendRequest({
+    required String accessToken,
+    required String requestId,
+  }) async {}
+
+  @override
+  Future<void> ignoreFriendRequest({
+    required String accessToken,
+    required String requestId,
+  }) async {}
+
+  @override
+  Future<void> createFriendRequest({
+    required String accessToken,
+    required String targetHandle,
+    String? message,
+  }) async {}
+
+  @override
+  Future<List<FriendSummary>> fetchFriends({
+    required String accessToken,
+  }) async {
+    return [
+      FriendSummary(
+        friendUserId: 'user-2',
+        createdAt: DateTime(2026, 1, 1),
+        profile: const FriendUserProfile(
+          id: 'user-2',
+          nickname: 'Peer User',
+          handle: 'peer_user',
+          avatarUrl: null,
+        ),
+      ),
+    ];
+  }
+
+  @override
+  Future<List<FriendRequestSummary>> fetchIncomingRequests({
+    required String accessToken,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<int> fetchUnreadIncomingRequestCount({
+    required String accessToken,
+  }) async {
+    return 0;
+  }
+
+  @override
+  Future<List<FriendRequestSummary>> fetchOutgoingRequests({
+    required String accessToken,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<void> rejectFriendRequest({
+    required String accessToken,
+    required String requestId,
+  }) async {}
+
+  @override
+  Future<void> markIncomingRequestsViewed({
+    required String accessToken,
+  }) async {}
+
+  @override
+  Future<void> removeFriend({
+    required String accessToken,
+    required String friendUserId,
+  }) async {}
 }
 
 class _FakeConversationRepository implements ConversationRepository {

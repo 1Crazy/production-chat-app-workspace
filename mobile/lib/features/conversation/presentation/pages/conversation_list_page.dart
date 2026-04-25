@@ -148,9 +148,6 @@ class _ConversationListPageState extends State<ConversationListPage> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const _HeaderActionButton(
-                        icon: Icons.person_add_alt_1_outlined,
-                      ),
                       _HeaderActionButton(
                         icon: Icons.add_rounded,
                         onTap: widget.onComposeTap,
@@ -468,7 +465,7 @@ class _ConversationListEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return const AppEmptyStateCard(
       title: '暂无会话',
-      description: '点击右上角加号，发起单聊或创建群聊。',
+      description: '点击右上角 + 添加好友，或创建群聊。',
       icon: Icons.forum_outlined,
     );
   }

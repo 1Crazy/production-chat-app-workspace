@@ -92,6 +92,46 @@ export class AppConfigService {
       .filter((handle) => handle.length > 0);
   }
 
+  get authRateLimitEnabled(): boolean {
+    return this.getOrThrow('authRateLimitEnabled');
+  }
+
+  get authRateLimitWindowMinutes(): number {
+    return this.getOrThrow('authRateLimitWindowMinutes');
+  }
+
+  get authRequestCodeSourceLimit(): number {
+    return this.getOrThrow('authRequestCodeSourceLimit');
+  }
+
+  get authRequestCodeIdentifierLimit(): number {
+    return this.getOrThrow('authRequestCodeIdentifierLimit');
+  }
+
+  get authRegisterSourceLimit(): number {
+    return this.getOrThrow('authRegisterSourceLimit');
+  }
+
+  get authRegisterIdentifierLimit(): number {
+    return this.getOrThrow('authRegisterIdentifierLimit');
+  }
+
+  get authLoginSourceLimit(): number {
+    return this.getOrThrow('authLoginSourceLimit');
+  }
+
+  get authLoginIdentifierLimit(): number {
+    return this.getOrThrow('authLoginIdentifierLimit');
+  }
+
+  get authResetPasswordSourceLimit(): number {
+    return this.getOrThrow('authResetPasswordSourceLimit');
+  }
+
+  get authResetPasswordIdentifierLimit(): number {
+    return this.getOrThrow('authResetPasswordIdentifierLimit');
+  }
+
   private getOrThrow<Key extends keyof AppEnvironment>(
     key: Key,
   ): AppEnvironment[Key] {

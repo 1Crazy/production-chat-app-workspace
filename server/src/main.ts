@@ -14,6 +14,13 @@ async function bootstrap(): Promise<void> {
 
   app.useLogger(logger);
 
+  // 浏览器调试（含 Flutter Web）需要显式放开 HTTP CORS，
+  // 否则本地 `localhost:*` 页面访问 API 会被浏览器拦截。
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
+
   // 全局校验放在入口层统一启用，避免每个 controller 重复配置。
   app.useGlobalPipes(
     new ValidationPipe({

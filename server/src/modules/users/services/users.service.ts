@@ -9,11 +9,14 @@ import {
 
 import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
+import { toFriendshipRelationshipView } from '@app/modules/friendships/dto/friendship.dto';
+import { FriendshipsService } from '@app/modules/friendships/services/friendships.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly authIdentityService: AuthIdentityService,
+    private readonly friendshipsService: FriendshipsService,
     private readonly rateLimitService: RateLimitService,
   ) {}
 
@@ -63,19 +66,33 @@ export class UsersService {
       return {
         discoverable: false,
         profile: null,
+        relationship: toFriendshipRelationshipView({
+          status: 'none',
+        }),
       };
     }
 
-    if (user.id !== requesterUserId && user.discoveryMode === 'private') {
+    const relationship = await this.friendshipsService.getRelationshipByUserIds(
+      requesterUserId,
+      user.id,
+    );
+
+    if (
+      user.id !== requesterUserId &&
+      user.discoveryMode === 'private' &&
+      relationship.status === 'none'
+    ) {
       return {
         discoverable: false,
         profile: null,
+        relationship,
       };
     }
 
     return {
       discoverable: true,
       profile: toUserDiscoveryProfileDto(user),
+      relationship,
     };
   }
 }

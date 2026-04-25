@@ -8,28 +8,66 @@ datasource db {
 }
 
 model User {
-  id             String          @id @default(uuid())
-  identifier     String          @unique
-  nickname       String
-  handle         String          @unique
-  passwordHash   String?         @map("password_hash")
-  passwordUpdatedAt DateTime?    @map("password_updated_at")
-  avatarUrl      String?         @map("avatar_url")
-  discoveryMode  String          @default("public") @map("discovery_mode")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-  disabledAt     DateTime?       @map("disabled_at")
-  deviceSessions DeviceSession[]
-  conversations  Conversation[]  @relation("ConversationCreator")
-  memberships    ConversationMember[]
-  messages       Message[]
-  mediaUploads   MediaAttachment[]
+  id                String              @id @default(uuid())
+  identifier        String              @unique
+  nickname          String
+  handle            String              @unique
+  passwordHash      String?             @map("password_hash")
+  passwordUpdatedAt DateTime?           @map("password_updated_at")
+  friendRequestLastViewedAt DateTime?   @map("friend_request_last_viewed_at")
+  avatarUrl         String?             @map("avatar_url")
+  discoveryMode     String              @default("public") @map("discovery_mode")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  disabledAt        DateTime?           @map("disabled_at")
+  deviceSessions    DeviceSession[]
+  conversations     Conversation[]      @relation("ConversationCreator")
+  memberships       ConversationMember[]
+  friendRequestsSent     FriendRequest[] @relation("FriendRequestRequester")
+  friendRequestsReceived FriendRequest[] @relation("FriendRequestAddressee")
+  friendshipsAsUserA     Friendship[]    @relation("FriendshipUserA")
+  friendshipsAsUserB     Friendship[]    @relation("FriendshipUserB")
+  messages          Message[]
+  mediaUploads      MediaAttachment[]
   pushRegistrations PushRegistration[]
-  readCursors    ReadCursor[]
-  reportsFiled   ModerationReport[] @relation("ModerationReportReporter")
-  adminAuditLogs AdminAuditLog[] @relation("AdminAuditLogActor")
+  readCursors       ReadCursor[]
+  reportsFiled      ModerationReport[] @relation("ModerationReportReporter")
+  adminAuditLogs    AdminAuditLog[] @relation("AdminAuditLogActor")
 
   @@map("users")
+}
+
+model FriendRequest {
+  id          String   @id @default(uuid())
+  requesterId String   @map("requester_id")
+  addresseeId String   @map("addressee_id")
+  status      String   @default("pending")
+  message     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  respondedAt DateTime? @map("responded_at")
+  ignoredByAddresseeAt DateTime? @map("ignored_by_addressee_at")
+  requester   User     @relation("FriendRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee   User     @relation("FriendRequestAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId, status, createdAt])
+  @@index([addresseeId, status, createdAt])
+  @@index([requesterId, addresseeId, status])
+  @@map("friend_requests")
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  userAId   String   @map("user_a_id")
+  userBId   String   @map("user_b_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  userA     User     @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+  @@index([userAId, createdAt])
+  @@index([userBId, createdAt])
+  @@map("friendships")
 }
 
 model VerificationCode {

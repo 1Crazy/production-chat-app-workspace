@@ -5,6 +5,7 @@ export interface AuthUserEntity {
   handle: string;
   passwordHash: string | null;
   passwordUpdatedAt: Date | null;
+  friendRequestLastViewedAt: Date | null;
   avatarUrl: string | null;
   discoveryMode: 'public' | 'private';
   createdAt: Date;

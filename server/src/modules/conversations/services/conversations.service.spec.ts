@@ -4,16 +4,24 @@ import type { RateLimitService } from '@app/infra/abuse/services/rate-limit.serv
 import { InMemoryChatModelRepository } from '@app/infra/database/repositories/in-memory-chat-model.repository';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
+import { InMemoryFriendshipRepository } from '@app/modules/friendships/repositories/in-memory-friendship.repository';
+import { FriendshipsService } from '@app/modules/friendships/services/friendships.service';
 import type { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 
 describe('ConversationsService', () => {
   function createFixture() {
     const authRepository = new InMemoryAuthRepository();
+    const friendshipRepository = new InMemoryFriendshipRepository();
     const chatModelRepository = new InMemoryChatModelRepository();
     const authIdentityService = new AuthIdentityService(authRepository);
     const rateLimitService = {
       consumeOrThrow: jest.fn().mockResolvedValue(undefined),
     } as unknown as RateLimitService;
+    const friendshipsService = new FriendshipsService(
+      friendshipRepository,
+      authIdentityService,
+      rateLimitService,
+    );
     const chatGateway = {
       emitConversationCreated: jest.fn(),
       emitReadCursorUpdated: jest.fn().mockResolvedValue(undefined),
@@ -21,12 +29,14 @@ describe('ConversationsService', () => {
     const service = new ConversationsService(
       chatModelRepository,
       authIdentityService,
+      friendshipsService,
       rateLimitService,
       chatGateway,
     );
 
     return {
       authRepository,
+      friendshipRepository,
       chatGateway,
       chatModelRepository,
       rateLimitService,
@@ -173,5 +183,50 @@ describe('ConversationsService', () => {
         memberHandles: ['bob_user', 'carol_user'],
       }),
     ).rejects.toThrow('建群操作过于频繁，请稍后再试');
+  });
+
+  it('should reject direct conversations for users who are not friends', async () => {
+    const fixture = createFixture();
+    const alice = await fixture.authRepository.createUser({
+      identifier: 'alice@example.com',
+      nickname: 'Alice',
+      handle: 'alice_user',
+    });
+    await fixture.authRepository.createUser({
+      identifier: 'bob@example.com',
+      nickname: 'Bob',
+      handle: 'bob_user',
+    });
+
+    await expect(
+      fixture.service.createDirectConversation(alice.id, {
+        targetHandle: 'bob_user',
+      }),
+    ).rejects.toThrow('仅支持与好友发起单聊');
+  });
+
+  it('should allow direct conversations after friendship is created', async () => {
+    const fixture = createFixture();
+    const alice = await fixture.authRepository.createUser({
+      identifier: 'alice@example.com',
+      nickname: 'Alice',
+      handle: 'alice_user',
+    });
+    const bob = await fixture.authRepository.createUser({
+      identifier: 'bob@example.com',
+      nickname: 'Bob',
+      handle: 'bob_user',
+    });
+    await fixture.friendshipRepository.createFriendship({
+      userId: alice.id,
+      friendUserId: bob.id,
+    });
+
+    const result = await fixture.service.createDirectConversation(alice.id, {
+      targetHandle: 'bob_user',
+    });
+
+    expect(result.reused).toBe(false);
+    expect(result.conversation.type).toBe('direct');
   });
 });

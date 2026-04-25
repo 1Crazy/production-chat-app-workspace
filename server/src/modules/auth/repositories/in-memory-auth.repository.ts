@@ -79,6 +79,7 @@ export class InMemoryAuthRepository extends AuthRepository {
       handle: params.handle,
       passwordHash: params.passwordHash ?? null,
       passwordUpdatedAt: params.passwordUpdatedAt ?? null,
+      friendRequestLastViewedAt: null,
       avatarUrl: null,
       discoveryMode: 'public',
       createdAt: now,

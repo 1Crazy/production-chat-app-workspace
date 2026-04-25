@@ -1,9 +1,11 @@
+import 'package:production_chat_app/features/friendship/data/dto/friendship_dto.dart';
 import 'package:production_chat_app/features/profile/domain/entities/discoverable_user.dart';
 
 class DiscoverableUserDto {
   const DiscoverableUserDto({
     required this.discoverable,
     required this.profile,
+    required this.relationship,
   });
 
   factory DiscoverableUserDto.fromJson(Map<String, dynamic> json) {
@@ -14,16 +16,21 @@ class DiscoverableUserDto {
               json['profile'] as Map<String, dynamic>,
             )
           : null,
+      relationship: FriendshipRelationshipDto.fromJson(
+        json['relationship'] as Map<String, dynamic>? ?? const {},
+      ),
     );
   }
 
   final bool discoverable;
   final DiscoverableProfileDto? profile;
+  final FriendshipRelationshipDto relationship;
 
   DiscoverableUser toEntity() {
     return DiscoverableUser(
       discoverable: discoverable,
       profile: profile?.toEntity(),
+      relationship: relationship.toEntity(),
     );
   }
 }

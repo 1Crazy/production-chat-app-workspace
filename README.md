@@ -17,7 +17,7 @@
 本地开发建议把基础设施放进 Docker，应用本身继续在宿主机上跑：
 
 ```bash
-pnpm infra:up
+pnpm dev:db
 ```
 
 这会启动：
@@ -30,7 +30,7 @@ pnpm infra:up
 如果这些端口已经被占用，可以在命令前覆写：
 
 ```bash
-POSTGRES_PORT=55432 REDIS_PORT=56379 MINIO_PORT=59000 MINIO_CONSOLE_PORT=59001 pnpm infra:up
+POSTGRES_PORT=55432 REDIS_PORT=56379 MINIO_PORT=59000 MINIO_CONSOLE_PORT=59001 pnpm db:up
 ```
 
 本地开发直接复用现有环境模板：
@@ -48,22 +48,42 @@ POSTGRES_PORT=55432 REDIS_PORT=56379 MINIO_PORT=59000 MINIO_CONSOLE_PORT=59001 p
 停止基础设施：
 
 ```bash
-pnpm infra:down
+pnpm db:down
 ```
 
 如果你已经起过一次本地 PostgreSQL，又想重新执行初始化脚本创建 `chat_dev` / `chat_test` 数据库，可以清掉卷后重建：
 
 ```bash
 docker compose -f docker/compose.infra.yml down -v
-pnpm infra:up
+pnpm db:up
 ```
 
-### Flutter
+### 推荐开发顺序
 
 ```bash
-cd mobile
-flutter pub get
-flutter run
+pnpm dev:prepare
+pnpm dev:server
+pnpm dev:web
+```
+
+说明：
+
+- `pnpm dev:prepare`：启动本地 PostgreSQL / Redis / MinIO，并执行后端开发环境迁移
+- `pnpm dev:server`：启动 NestJS 开发服务
+- `pnpm dev:web`：启动 Flutter Web（Chrome）
+
+### Flutter / Web
+
+```bash
+pnpm dev:web
+```
+
+其他环境：
+
+```bash
+pnpm dev:web:test
+pnpm dev:web:staging
+pnpm dev:web:prod
 ```
 
 ### Firebase 接线状态
@@ -83,10 +103,9 @@ flutter run
 ### NestJS
 
 ```bash
-cd server
-pnpm install
-pnpm prisma:migrate:dev
-pnpm start:dev
+pnpm server:generate
+pnpm server:migrate:dev
+pnpm server:dev
 ```
 
 启动前请确认 PostgreSQL 和 Redis 都已可用；当前服务端把会话实时广播、在线态、输入中 TTL、消息幂等键以及多实例 Socket.IO 协调都建立在 Redis 上。
@@ -94,8 +113,8 @@ pnpm start:dev
 如果你本地基础设施走 Docker，且 PostgreSQL 映射在 `55432`，直接用这组命令：
 
 ```bash
-pnpm migrate:server:docker-local
-pnpm dev:server:docker-local
+pnpm server:migrate:docker-local
+pnpm server:docker-local
 ```
 
 ### 全容器化后端栈
@@ -104,7 +123,7 @@ pnpm dev:server:docker-local
 
 ```bash
 cp docker/.env.stack.example docker/.env.stack
-docker compose --env-file docker/.env.stack -f docker/compose.stack.yml up -d --build
+pnpm stack:up
 ```
 
 这套栈会启动：

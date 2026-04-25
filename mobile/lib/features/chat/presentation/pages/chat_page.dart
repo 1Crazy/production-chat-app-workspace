@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:production_chat_app/features/chat/application/chat_controller.dart';
 import 'package:production_chat_app/features/chat/domain/entities/chat_message.dart';
 import 'package:production_chat_app/features/chat/domain/entities/chat_read_receipt_member.dart';
-import 'package:production_chat_app/features/chat/presentation/chat_time_format.dart';
 import 'package:production_chat_app/features/chat/domain/repositories/chat_repository.dart';
+import 'package:production_chat_app/features/chat/presentation/chat_time_format.dart';
 import 'package:production_chat_app/features/chat/presentation/widgets/chat_message_bubble.dart';
 import 'package:production_chat_app/features/conversation/domain/entities/conversation_summary.dart';
-import 'package:production_chat_app/features/profile/presentation/pages/member_profile_page.dart';
+import 'package:production_chat_app/features/friendship/presentation/pages/relationship_profile_page.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime.dart';
 import 'package:production_chat_app/shared/widgets/status_surfaces.dart';
 
@@ -369,7 +369,11 @@ class _ChatPageState extends State<ChatPage> {
     final handle = await Navigator.of(context).push<String?>(
       MaterialPageRoute<String?>(
         builder: (context) {
-          return MemberProfilePage(member: member);
+          return RelationshipProfilePage(
+            handle: member.handle,
+            displayName: member.displayName,
+            avatarUrl: member.avatarUrl,
+          );
         },
       ),
     );

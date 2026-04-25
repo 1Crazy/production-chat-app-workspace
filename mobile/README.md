@@ -17,7 +17,21 @@ lib/
 ## 运行
 
 ```bash
-flutter run --dart-define-from-file=config/env/development.json.example
+pnpm dev:web
+```
+
+在 `mobile/` 目录内仍可直接执行：
+
+```bash
+flutter run -d chrome --dart-define-from-file=config/env/development.json.example
+```
+
+其他环境：
+
+```bash
+pnpm dev:web:test
+pnpm dev:web:staging
+pnpm dev:web:prod
 ```
 
 ## Firebase Messaging 配置
@@ -40,7 +54,7 @@ flutter run --dart-define-from-file=config/env/development.json.example
 
 ```bash
 flutter pub get
-flutter run --dart-define-from-file=config/env/development.json.example
+pnpm dev:web
 ```
 
 说明：

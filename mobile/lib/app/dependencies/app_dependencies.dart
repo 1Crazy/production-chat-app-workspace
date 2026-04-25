@@ -9,6 +9,9 @@ import 'package:production_chat_app/features/chat/domain/repositories/chat_repos
 import 'package:production_chat_app/features/conversation/data/datasources/conversation_remote_data_source.dart';
 import 'package:production_chat_app/features/conversation/data/repositories/conversation_repository_impl.dart';
 import 'package:production_chat_app/features/conversation/domain/repositories/conversation_repository.dart';
+import 'package:production_chat_app/features/friendship/data/datasources/friendship_remote_data_source.dart';
+import 'package:production_chat_app/features/friendship/data/repositories/friendship_repository_impl.dart';
+import 'package:production_chat_app/features/friendship/domain/repositories/friendship_repository.dart';
 import 'package:production_chat_app/features/profile/data/datasources/profile_remote_data_source.dart';
 import 'package:production_chat_app/features/profile/data/repositories/profile_repository_impl.dart';
 import 'package:production_chat_app/features/profile/domain/repositories/profile_repository.dart';
@@ -32,6 +35,7 @@ class AppDependencies {
     required this.chatRealtime,
     required this.conversationRepository,
     required this.firebaseReady,
+    required this.friendshipRepository,
     required this.notificationRemoteDataSource,
     required this.profileRepository,
     required this.pushNotificationService,
@@ -44,6 +48,7 @@ class AppDependencies {
   final ChatRealtime chatRealtime;
   final ConversationRepository conversationRepository;
   final bool firebaseReady;
+  final FriendshipRepository friendshipRepository;
   final NotificationRemoteDataSource notificationRemoteDataSource;
   final ProfileRepository profileRepository;
   final PushNotificationService pushNotificationService;
@@ -80,6 +85,9 @@ class AppDependencies {
         remoteDataSource: ConversationRemoteDataSource(apiClient: apiClient),
       ),
       firebaseReady: firebaseReady,
+      friendshipRepository: FriendshipRepositoryImpl(
+        remoteDataSource: FriendshipRemoteDataSource(apiClient: apiClient),
+      ),
       notificationRemoteDataSource: notificationRemoteDataSource,
       profileRepository: ProfileRepositoryImpl(
         remoteDataSource: ProfileRemoteDataSource(apiClient: apiClient),

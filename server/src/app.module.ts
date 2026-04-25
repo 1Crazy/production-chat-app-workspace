@@ -8,6 +8,7 @@ import { QueueModule } from './infra/queue/queue.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
+import { FriendshipsModule } from './modules/friendships/friendships.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { MediaModule } from './modules/media/media.module';
 import { MessagesModule } from './modules/messages/messages.module';
@@ -25,6 +26,7 @@ import { UsersModule } from './modules/users/users.module';
     ObservabilityModule,
     AuthModule,
     UsersModule,
+    FriendshipsModule,
     ConversationsModule,
     MessagesModule,
     RealtimeModule,

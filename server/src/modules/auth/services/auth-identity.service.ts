@@ -51,4 +51,14 @@ export class AuthIdentityService {
     await this.authRepository.saveUser(user);
     return user;
   }
+
+  async markFriendRequestsViewed(
+    userId: string,
+    viewedAt = new Date(),
+  ): Promise<void> {
+    const user = await this.getActiveUserById(userId);
+    user.friendRequestLastViewedAt = viewedAt;
+    user.updatedAt = new Date();
+    await this.authRepository.saveUser(user);
+  }
 }

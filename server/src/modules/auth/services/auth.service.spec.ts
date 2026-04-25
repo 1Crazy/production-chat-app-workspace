@@ -11,14 +11,45 @@ import type { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 describe('AuthService', () => {
   function createFixture() {
     const authRepository = new InMemoryAuthRepository();
-    const authTokenService = new AuthTokenService({
+    const appConfig = {
       get jwtAccessSecret() {
         return 'access-secret';
       },
       get jwtRefreshSecret() {
         return 'refresh-secret';
       },
-    } as unknown as AppConfigService);
+      get authRateLimitEnabled() {
+        return true;
+      },
+      get authRateLimitWindowMinutes() {
+        return 10;
+      },
+      get authRequestCodeSourceLimit() {
+        return 6;
+      },
+      get authRequestCodeIdentifierLimit() {
+        return 3;
+      },
+      get authRegisterSourceLimit() {
+        return 5;
+      },
+      get authRegisterIdentifierLimit() {
+        return 3;
+      },
+      get authLoginSourceLimit() {
+        return 10;
+      },
+      get authLoginIdentifierLimit() {
+        return 5;
+      },
+      get authResetPasswordSourceLimit() {
+        return 5;
+      },
+      get authResetPasswordIdentifierLimit() {
+        return 3;
+      },
+    } as unknown as AppConfigService;
+    const authTokenService = new AuthTokenService(appConfig);
     const chatGateway = {
       disconnectSession: jest.fn(),
     } as unknown as ChatGateway;
@@ -30,6 +61,7 @@ describe('AuthService', () => {
       authRepository,
       authPasswordService,
       authTokenService,
+      appConfig,
       rateLimitService,
       chatGateway,
     );
@@ -92,6 +124,50 @@ describe('AuthService', () => {
         'source-1',
       ),
     ).rejects.toThrow('验证码请求过于频繁，请稍后再试');
+  });
+
+  it('should skip auth rate limiting when disabled by env config', async () => {
+    const authRepository = new InMemoryAuthRepository();
+    const appConfig = {
+      jwtAccessSecret: 'access-secret',
+      jwtRefreshSecret: 'refresh-secret',
+      authRateLimitEnabled: false,
+      authRateLimitWindowMinutes: 10,
+      authRequestCodeSourceLimit: 6,
+      authRequestCodeIdentifierLimit: 3,
+      authRegisterSourceLimit: 5,
+      authRegisterIdentifierLimit: 3,
+      authLoginSourceLimit: 10,
+      authLoginIdentifierLimit: 5,
+      authResetPasswordSourceLimit: 5,
+      authResetPasswordIdentifierLimit: 3,
+    } as AppConfigService;
+    const authTokenService = new AuthTokenService(appConfig);
+    const authPasswordService = new AuthPasswordService();
+    const chatGateway = {
+      disconnectSession: jest.fn(),
+    } as unknown as ChatGateway;
+    const rateLimitService = {
+      consumeOrThrow: jest.fn(),
+    } as unknown as RateLimitService;
+    const service = new AuthService(
+      authRepository,
+      authPasswordService,
+      authTokenService,
+      appConfig,
+      rateLimitService,
+      chatGateway,
+    );
+
+    await service.requestCode({
+      identifier: 'alice@example.com',
+      purpose: 'register',
+    });
+
+    expect(
+      (rateLimitService as unknown as { consumeOrThrow: jest.Mock })
+        .consumeOrThrow,
+    ).not.toHaveBeenCalled();
   });
 
   it('should require a password reset before legacy code-only accounts can login', async () => {

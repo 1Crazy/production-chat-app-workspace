@@ -9,6 +9,7 @@ import 'package:production_chat_app/features/contacts/presentation/pages/contact
 import 'package:production_chat_app/features/conversation/presentation/pages/conversation_list_page.dart';
 import 'package:production_chat_app/features/conversation/domain/entities/conversation_summary.dart';
 import 'package:production_chat_app/features/discover/presentation/pages/discover_page.dart';
+import 'package:production_chat_app/features/friendship/presentation/pages/friend_requests_page.dart';
 import 'package:production_chat_app/features/me/presentation/pages/me_home_page.dart';
 import 'package:production_chat_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:production_chat_app/shared/config/app_environment.dart';
@@ -35,10 +36,12 @@ class _AppShellState extends State<AppShell> {
   int _conversationReloadToken = 0;
   int _chatReloadToken = 0;
   int _totalUnreadCount = 0;
+  int _pendingFriendRequestCount = 0;
   AppBadgeService? _appBadgeService;
   ChatRealtime? _chatRealtime;
   PushNotificationService? _pushNotificationService;
   String? _activeRealtimeToken;
+  String? _activeFriendshipToken;
   Map<String, int> _knownConversationLatestSequenceById = const {};
   StreamSubscription<dynamic>? _sessionRevokedSubscription;
   StreamSubscription<ChatRealtimeConnectionState>? _connectionStateSubscription;
@@ -114,6 +117,7 @@ class _AppShellState extends State<AppShell> {
     }
 
     _ensureRealtimeConnected(accessToken);
+    _ensureFriendRequestCountLoaded(accessToken);
     final messageTopBanner = _buildMessageTopBanner(
       firebaseReady: dependencies.firebaseReady,
     );
@@ -166,7 +170,18 @@ class _AppShellState extends State<AppShell> {
                 );
               },
             ),
-      const ContactsPage(),
+      ContactsPage(
+        pendingRequestCount: _pendingFriendRequestCount,
+        onOpenDirectConversation: (handle) async {
+          await _openDirectConversation(
+            handle: handle,
+            accessToken: accessToken,
+          );
+        },
+        onFriendshipStateChanged: () async {
+          await _refreshFriendRequestCount(accessToken);
+        },
+      ),
       const DiscoverPage(),
       const ActivityPage(),
       MeHomePage(
@@ -200,7 +215,8 @@ class _AppShellState extends State<AppShell> {
       body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: _ShellBottomBar(
         currentIndex: _currentIndex,
-        unreadCount: _totalUnreadCount,
+        messageUnreadCount: _totalUnreadCount,
+        contactBadgeCount: _pendingFriendRequestCount,
         onSelected: (index) {
           setState(() {
             _currentIndex = index;
@@ -208,6 +224,7 @@ class _AppShellState extends State<AppShell> {
               _selectedConversation = null;
             }
           });
+          unawaited(_refreshFriendRequestCount(accessToken));
         },
       ),
     );
@@ -232,6 +249,40 @@ class _AppShellState extends State<AppShell> {
 
     _activeRealtimeToken = accessToken;
     _chatRealtime?.connect(accessToken: accessToken);
+  }
+
+  void _ensureFriendRequestCountLoaded(String accessToken) {
+    if (_activeFriendshipToken == accessToken) {
+      return;
+    }
+
+    _activeFriendshipToken = accessToken;
+    unawaited(_refreshFriendRequestCount(accessToken));
+  }
+
+  Future<void> _refreshFriendRequestCount(String accessToken) async {
+    final dependencies = AppDependenciesScope.of(context);
+
+    try {
+      final unseenCount = await dependencies.friendshipRepository
+          .fetchUnreadIncomingRequestCount(accessToken: accessToken);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _pendingFriendRequestCount = unseenCount;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _pendingFriendRequestCount = 0;
+      });
+    }
   }
 
   Future<void> _openDirectConversation({
@@ -316,12 +367,12 @@ class _AppShellState extends State<AppShell> {
               children: [
                 _ConversationComposerTile(
                   icon: Icons.person_add_alt_1_rounded,
-                  title: '新单聊',
-                  subtitle: '输入对方账号，创建或复用一对一会话',
+                  title: '添加好友',
+                  subtitle: '搜索账号并发送好友申请',
                   onTap: () {
                     Navigator.of(
                       context,
-                    ).pop(_ConversationComposerAction.direct);
+                    ).pop(_ConversationComposerAction.addFriend);
                   },
                 ),
                 const SizedBox(height: 12),
@@ -347,32 +398,22 @@ class _AppShellState extends State<AppShell> {
     }
 
     switch (action) {
-      case _ConversationComposerAction.direct:
-        await _showCreateDirectConversationDialog(accessToken);
+      case _ConversationComposerAction.addFriend:
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (context) {
+              return const FriendRequestsPage();
+            },
+          ),
+        );
+        if (!mounted) {
+          return;
+        }
+        await _refreshFriendRequestCount(accessToken);
         break;
       case _ConversationComposerAction.group:
         await _showCreateGroupConversationDialog(accessToken);
         break;
-    }
-  }
-
-  Future<void> _showCreateDirectConversationDialog(String accessToken) async {
-    final handle = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return const _CreateDirectConversationDialog();
-      },
-    );
-
-    if (handle == null || handle.isEmpty || !mounted) {
-      return;
-    }
-
-    try {
-      await _openDirectConversation(handle: handle, accessToken: accessToken);
-      _showFeedback('已打开与 $handle 的单聊');
-    } catch (error) {
-      _showFeedback(formatDisplayError(error));
     }
   }
 
@@ -667,12 +708,14 @@ class _AppShellState extends State<AppShell> {
 class _ShellBottomBar extends StatelessWidget {
   const _ShellBottomBar({
     required this.currentIndex,
-    required this.unreadCount,
+    required this.messageUnreadCount,
+    required this.contactBadgeCount,
     required this.onSelected,
   });
 
   final int currentIndex;
-  final int unreadCount;
+  final int messageUnreadCount;
+  final int contactBadgeCount;
   final ValueChanged<int> onSelected;
 
   @override
@@ -706,7 +749,11 @@ class _ShellBottomBar extends StatelessWidget {
                   icon: items[index].$2,
                   selectedIcon: items[index].$3,
                   selected: currentIndex == index,
-                  badgeCount: index == 0 ? unreadCount : 0,
+                  badgeCount: switch (index) {
+                    0 => messageUnreadCount,
+                    1 => contactBadgeCount,
+                    _ => 0,
+                  },
                   onTap: () {
                     onSelected(index);
                   },
@@ -832,7 +879,7 @@ class _FirebaseConfigurationBanner extends StatelessWidget {
   }
 }
 
-enum _ConversationComposerAction { direct, group }
+enum _ConversationComposerAction { addFriend, group }
 
 class _ConversationComposerTile extends StatelessWidget {
   const _ConversationComposerTile({

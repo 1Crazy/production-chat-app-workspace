@@ -24,6 +24,7 @@ import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import type { MessageEntity } from '@app/infra/database/entities/message.entity';
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
+import { FriendshipsService } from '@app/modules/friendships/services/friendships.service';
 import { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 import { toUserDiscoveryProfileDto } from '@app/modules/users/dto/user-profile.dto';
 
@@ -35,6 +36,7 @@ export class ConversationsService {
   constructor(
     private readonly chatModelRepository: ChatModelRepository,
     private readonly authIdentityService: AuthIdentityService,
+    private readonly friendshipsService: FriendshipsService,
     private readonly rateLimitService: RateLimitService,
     private readonly chatGateway: ChatGateway,
   ) {}
@@ -67,6 +69,9 @@ export class ConversationsService {
     const targetUser = await this.resolveTargetUser(
       requesterUserId,
       dto.targetHandle,
+      {
+        requireFriendship: true,
+      },
     );
     const existingConversation =
       await this.chatModelRepository.findDirectConversationByMemberIds([
@@ -365,6 +370,9 @@ export class ConversationsService {
   private async resolveTargetUser(
     requesterUserId: string,
     targetHandle: string,
+    params?: {
+      requireFriendship?: boolean;
+    },
   ) {
     const normalizedHandle = targetHandle.trim();
     const targetUser = await this.authIdentityService.findActiveUserByHandle(
@@ -379,7 +387,14 @@ export class ConversationsService {
       throw new BadRequestException('不能和自己发起会话');
     }
 
-    // 当前还没有好友/邀请体系，首期直接复用联系人发现规则控制可建聊对象。
+    if (params?.requireFriendship) {
+      await this.friendshipsService.assertDirectConversationAllowed(
+        requesterUserId,
+        targetUser.id,
+      );
+      return targetUser;
+    }
+
     if (targetUser.discoveryMode === 'private') {
       throw new ForbiddenException('目标用户未开放联系人发现');
     }

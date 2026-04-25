@@ -18,6 +18,16 @@ export interface AppEnvironment {
   readonly apnsBundleId?: string;
   readonly apnsPrivateKey?: string;
   readonly adminHandles?: string;
+  readonly authRateLimitEnabled: boolean;
+  readonly authRateLimitWindowMinutes: number;
+  readonly authRequestCodeSourceLimit: number;
+  readonly authRequestCodeIdentifierLimit: number;
+  readonly authRegisterSourceLimit: number;
+  readonly authRegisterIdentifierLimit: number;
+  readonly authLoginSourceLimit: number;
+  readonly authLoginIdentifierLimit: number;
+  readonly authResetPasswordSourceLimit: number;
+  readonly authResetPasswordIdentifierLimit: number;
 }
 
 const requiredKeys = [
@@ -63,6 +73,40 @@ export function validateEnv(
     apnsBundleId: readOptionalString(rawConfig.APNS_BUNDLE_ID),
     apnsPrivateKey: readOptionalString(rawConfig.APNS_PRIVATE_KEY),
     adminHandles: readOptionalString(rawConfig.ADMIN_HANDLES),
+    authRateLimitEnabled: readBoolean(rawConfig.AUTH_RATE_LIMIT_ENABLED, true),
+    authRateLimitWindowMinutes: readNumber(
+      rawConfig.AUTH_RATE_LIMIT_WINDOW_MINUTES,
+      10,
+    ),
+    authRequestCodeSourceLimit: readNumber(
+      rawConfig.AUTH_REQUEST_CODE_SOURCE_LIMIT,
+      6,
+    ),
+    authRequestCodeIdentifierLimit: readNumber(
+      rawConfig.AUTH_REQUEST_CODE_IDENTIFIER_LIMIT,
+      3,
+    ),
+    authRegisterSourceLimit: readNumber(
+      rawConfig.AUTH_REGISTER_SOURCE_LIMIT,
+      5,
+    ),
+    authRegisterIdentifierLimit: readNumber(
+      rawConfig.AUTH_REGISTER_IDENTIFIER_LIMIT,
+      3,
+    ),
+    authLoginSourceLimit: readNumber(rawConfig.AUTH_LOGIN_SOURCE_LIMIT, 10),
+    authLoginIdentifierLimit: readNumber(
+      rawConfig.AUTH_LOGIN_IDENTIFIER_LIMIT,
+      5,
+    ),
+    authResetPasswordSourceLimit: readNumber(
+      rawConfig.AUTH_RESET_PASSWORD_SOURCE_LIMIT,
+      5,
+    ),
+    authResetPasswordIdentifierLimit: readNumber(
+      rawConfig.AUTH_RESET_PASSWORD_IDENTIFIER_LIMIT,
+      3,
+    ),
   };
 }
 
@@ -73,4 +117,31 @@ function readOptionalString(value: unknown): string | undefined {
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized == 'true') {
+    return true;
+  }
+
+  if (normalized == 'false') {
+    return false;
+  }
+
+  return fallback;
+}
+
+function readNumber(value: unknown, fallback: number): number {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : fallback;
 }

@@ -3,15 +3,27 @@ import { UsersService } from './users.service';
 import type { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
+import { InMemoryFriendshipRepository } from '@app/modules/friendships/repositories/in-memory-friendship.repository';
+import { FriendshipsService } from '@app/modules/friendships/services/friendships.service';
 
 describe('UsersService', () => {
   function createFixture() {
     const authRepository = new InMemoryAuthRepository();
+    const friendshipRepository = new InMemoryFriendshipRepository();
     const authIdentityService = new AuthIdentityService(authRepository);
     const rateLimitService = {
       consumeOrThrow: jest.fn().mockResolvedValue(undefined),
     } as unknown as RateLimitService;
-    const service = new UsersService(authIdentityService, rateLimitService);
+    const friendshipsService = new FriendshipsService(
+      friendshipRepository,
+      authIdentityService,
+      rateLimitService,
+    );
+    const service = new UsersService(
+      authIdentityService,
+      friendshipsService,
+      rateLimitService,
+    );
 
     return {
       authRepository,

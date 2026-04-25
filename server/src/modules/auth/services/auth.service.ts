@@ -28,18 +28,18 @@ import { AuthPasswordService } from './auth-password.service';
 import { AuthTokenService } from './auth-token.service';
 
 import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
+import { AppConfigService } from '@app/infra/config/app-config.service';
 import { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 
 @Injectable()
 export class AuthService {
   private readonly verificationCodeTtlSeconds = 60 * 10;
-  private readonly authSourceWindowMs = 10 * 60 * 1000;
-  private readonly authIdentifierWindowMs = 10 * 60 * 1000;
 
   constructor(
     private readonly authRepository: AuthRepository,
     private readonly authPasswordService: AuthPasswordService,
     private readonly authTokenService: AuthTokenService,
+    private readonly appConfigService: AppConfigService,
     private readonly rateLimitService: RateLimitService,
     @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
@@ -67,8 +67,8 @@ export class AuthService {
       scope: `auth.request-code.${purpose}`,
       sourceKey,
       identifier: normalizedIdentifier,
-      sourceLimit: 6,
-      identifierLimit: 3,
+      sourceLimit: this.appConfigService.authRequestCodeSourceLimit,
+      identifierLimit: this.appConfigService.authRequestCodeIdentifierLimit,
       message: '验证码请求过于频繁，请稍后再试',
     });
     const verificationCode = this.generateVerificationCode();
@@ -100,8 +100,8 @@ export class AuthService {
       scope: 'auth.register',
       sourceKey,
       identifier,
-      sourceLimit: 5,
-      identifierLimit: 3,
+      sourceLimit: this.appConfigService.authRegisterSourceLimit,
+      identifierLimit: this.appConfigService.authRegisterIdentifierLimit,
       message: '注册尝试过于频繁，请稍后再试',
     });
 
@@ -138,8 +138,8 @@ export class AuthService {
       scope: 'auth.login',
       sourceKey,
       identifier,
-      sourceLimit: 10,
-      identifierLimit: 5,
+      sourceLimit: this.appConfigService.authLoginSourceLimit,
+      identifierLimit: this.appConfigService.authLoginIdentifierLimit,
       message: '登录尝试过于频繁，请稍后再试',
     });
     const user = await this.authRepository.findUserByIdentifier(identifier);
@@ -179,8 +179,8 @@ export class AuthService {
       scope: 'auth.reset-password',
       sourceKey,
       identifier,
-      sourceLimit: 5,
-      identifierLimit: 3,
+      sourceLimit: this.appConfigService.authResetPasswordSourceLimit,
+      identifierLimit: this.appConfigService.authResetPasswordIdentifierLimit,
       message: '重置密码尝试过于频繁，请稍后再试',
     });
     const user = await this.authRepository.findUserByIdentifier(identifier);
@@ -372,11 +372,18 @@ export class AuthService {
     identifierLimit: number;
     message: string;
   }): Promise<void> {
+    if (!this.appConfigService.authRateLimitEnabled) {
+      return;
+    }
+
+    const windowMs =
+      this.appConfigService.authRateLimitWindowMinutes * 60 * 1000;
+
     await this.rateLimitService.consumeOrThrow({
       scope: `${params.scope}.source`,
       actorKey: params.sourceKey,
       limit: params.sourceLimit,
-      windowMs: this.authSourceWindowMs,
+      windowMs,
       message: params.message,
       metadata: {
         identifier: params.identifier,
@@ -386,7 +393,7 @@ export class AuthService {
       scope: `${params.scope}.identifier`,
       actorKey: params.identifier,
       limit: params.identifierLimit,
-      windowMs: this.authIdentifierWindowMs,
+      windowMs,
       message: params.message,
       metadata: {
         sourceKey: params.sourceKey,

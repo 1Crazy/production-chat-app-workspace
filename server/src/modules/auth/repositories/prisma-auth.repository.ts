@@ -110,6 +110,7 @@ export class PrismaAuthRepository extends AuthRepository {
         handle: params.handle,
         passwordHash: params.passwordHash ?? null,
         passwordUpdatedAt: params.passwordUpdatedAt ?? null,
+        friendRequestLastViewedAt: null,
       },
     });
 
@@ -176,6 +177,7 @@ export class PrismaAuthRepository extends AuthRepository {
         handle: user.handle,
         passwordHash: user.passwordHash,
         passwordUpdatedAt: user.passwordUpdatedAt,
+        friendRequestLastViewedAt: user.friendRequestLastViewedAt,
         avatarUrl: user.avatarUrl,
         discoveryMode: user.discoveryMode,
         disabledAt: user.disabledAt,
@@ -266,6 +268,7 @@ export class PrismaAuthRepository extends AuthRepository {
       handle: user.handle,
       passwordHash: user.passwordHash,
       passwordUpdatedAt: user.passwordUpdatedAt,
+      friendRequestLastViewedAt: user.friendRequestLastViewedAt,
       avatarUrl: user.avatarUrl,
       discoveryMode: user.discoveryMode as AuthUserEntity['discoveryMode'],
       createdAt: user.createdAt,
