@@ -1,3 +1,4 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:production_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:production_chat_app/features/auth/data/datasources/auth_remote_data_source.dart';
@@ -26,6 +27,7 @@ import 'package:production_chat_app/shared/notifications/push_token_provider.dar
 import 'package:production_chat_app/shared/realtime/chat_realtime.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime_service.dart';
 import 'package:production_chat_app/shared/storage/key_value_store.dart';
+import 'package:production_chat_app/shared/storage/secure_key_value_store.dart';
 
 class AppDependencies {
   const AppDependencies({
@@ -60,6 +62,9 @@ class AppDependencies {
   }) async {
     final sharedPreferences = await SharedPreferences.getInstance();
     final keyValueStore = KeyValueStore(sharedPreferences: sharedPreferences);
+    final secureKeyValueStore = SecureKeyValueStore(
+      secureStorage: const FlutterSecureStorage(),
+    );
     final apiClient = ApiClient(baseUrl: environment.apiBaseUrl);
     final notificationRemoteDataSource = NotificationRemoteDataSource(
       apiClient: apiClient,
@@ -74,7 +79,10 @@ class AppDependencies {
     return AppDependencies(
       authRepository: AuthRepositoryImpl(
         remoteDataSource: AuthRemoteDataSource(apiClient: apiClient),
-        localDataSource: AuthLocalDataSource(keyValueStore: keyValueStore),
+        localDataSource: AuthLocalDataSource(
+          legacyKeyValueStore: keyValueStore,
+          secureKeyValueStore: secureKeyValueStore,
+        ),
       ),
       appBadgeService: const AppBadgeService(),
       chatRepository: ChatRepositoryImpl(

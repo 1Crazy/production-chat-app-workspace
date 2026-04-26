@@ -84,7 +84,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<AuthSession?> restore() async {
-    final dto = _localDataSource.readSession();
+    final dto = await _localDataSource.readSession();
     return dto?.toEntity();
   }
 
