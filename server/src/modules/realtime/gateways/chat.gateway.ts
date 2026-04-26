@@ -53,7 +53,7 @@ import type { MessageView } from '@app/modules/messages/dto/message.dto';
   namespace: REALTIME_NAMESPACE,
   // 启用 Socket.IO 的断线恢复，让弱网重连时可以恢复房间和 socket data。
   connectionStateRecovery: {
-    maxDisconnectionDuration: 2 * 60 * 1000,
+    maxDisconnectionDuration: 30 * 1000,
     skipMiddlewares: false,
   },
 })

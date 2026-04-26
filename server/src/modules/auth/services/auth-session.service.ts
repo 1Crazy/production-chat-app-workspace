@@ -117,6 +117,18 @@ export class AuthSessionService {
     };
   }
 
+  async revokeAllSessionsForUser(
+    userId: string,
+    reason = 'session_revoked',
+  ): Promise<void> {
+    const sessions = await this.authRepository.listActiveSessionsByUserId(userId);
+
+    for (const session of sessions) {
+      await this.authRepository.revokeSession(session.id);
+      await this.chatGateway.disconnectSession(session.id, reason);
+    }
+  }
+
   buildAuthResponse(
     user: AuthUserEntity,
     session: DeviceSessionEntity,

@@ -114,4 +114,41 @@ export class S3MediaObjectStorageService extends MediaObjectStorageService {
       };
     }
   }
+
+  override async readObjectBytes(params: {
+    objectKey: string;
+    maxBytes: number;
+  }): Promise<Buffer | null> {
+    try {
+      const response = await this.s3Client.send(
+        new GetObjectCommand({
+          Bucket: this.appConfigService.s3Bucket,
+          Key: params.objectKey,
+          Range: `bytes=0-${Math.max(params.maxBytes - 1, 0)}`,
+        }),
+      );
+
+      if (!response.Body) {
+        return null;
+      }
+
+      if (typeof response.Body.transformToByteArray === 'function') {
+        return Buffer.from(await response.Body.transformToByteArray());
+      }
+
+      const chunks: Buffer[] = [];
+
+      for await (const chunk of response.Body as AsyncIterable<
+        Buffer | Uint8Array | string
+      >) {
+        chunks.push(
+          typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk),
+        );
+      }
+
+      return Buffer.concat(chunks);
+    } catch {
+      return null;
+    }
+  }
 }

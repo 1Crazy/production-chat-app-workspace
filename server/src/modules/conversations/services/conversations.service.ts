@@ -27,6 +27,7 @@ import { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 @Injectable()
 export class ConversationsService {
   private readonly maxGroupMembers = 200;
+  private readonly createDirectWindowMs = 10 * 60 * 1000;
   private readonly createGroupWindowMs = 60 * 60 * 1000;
 
   constructor(
@@ -84,6 +85,17 @@ export class ConversationsService {
         ),
       };
     }
+
+    await this.rateLimitService.consumeOrThrow({
+      scope: 'conversations.create-direct',
+      actorKey: requesterUserId,
+      limit: 20,
+      windowMs: this.createDirectWindowMs,
+      message: '发起私聊过于频繁，请稍后再试',
+      metadata: {
+        targetHandle: dto.targetHandle.trim(),
+      },
+    });
 
     try {
       const conversation = await this.chatModelRepository.createConversation({

@@ -42,6 +42,7 @@ COPY --from=build /app/server/prisma.config.ts ./server/prisma.config.ts
 COPY --from=build /app/server/env ./server/env
 
 WORKDIR /app/server
+USER node
 
 EXPOSE 3000
 

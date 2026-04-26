@@ -34,6 +34,7 @@ describe('validateEnv', () => {
           AUTH_CODE_DELIVERY_MODE: 'webhook',
           AUTH_DEBUG_CODE_ENABLED: 'false',
           AUTH_CODE_WEBHOOK_URL: 'https://code-provider.example/send',
+          AUTH_CODE_WEBHOOK_SECRET: 'delivery-secret',
           AUTH_CODE_EMAIL_FROM: 'no-reply@example.com',
           AUTH_CODE_EMAIL_NICKNAME: 'Production Chat',
           AUTH_CODE_EMAIL_HANDLE: 'production_chat',
@@ -49,6 +50,7 @@ describe('validateEnv', () => {
           AUTH_CODE_DELIVERY_MODE: 'webhook',
           AUTH_DEBUG_CODE_ENABLED: 'false',
           AUTH_CODE_WEBHOOK_URL: 'https://code-provider.example/send',
+          AUTH_CODE_WEBHOOK_SECRET: 'delivery-secret',
         }),
       ),
     ).toThrow('CORS_ALLOWED_ORIGINS must not contain "*" in production or staging');
@@ -63,12 +65,71 @@ describe('validateEnv', () => {
           AUTH_CODE_DELIVERY_MODE: 'webhook',
           AUTH_DEBUG_CODE_ENABLED: 'false',
           AUTH_CODE_WEBHOOK_URL: 'https://code-provider.example/send',
+          AUTH_CODE_WEBHOOK_SECRET: 'delivery-secret',
           AUTH_CODE_EMAIL_FROM: 'no-reply@example.com',
           AUTH_CODE_EMAIL_NICKNAME: 'Production Chat',
           AUTH_CODE_EMAIL_HANDLE: 'production_chat',
         }),
       ).corsAllowedOrigins,
     ).toBe('https://chat.example.com,https://admin.example.com');
+  });
+
+  it('should require a webhook secret in production webhook mode', () => {
+    expect(() =>
+      validateEnv(
+        buildEnv({
+          NODE_ENV: 'production',
+          CORS_ALLOWED_ORIGINS: 'https://chat.example.com',
+          AUTH_CODE_DELIVERY_MODE: 'webhook',
+          AUTH_DEBUG_CODE_ENABLED: 'false',
+          AUTH_CODE_WEBHOOK_URL: 'https://code-provider.example/send',
+          AUTH_CODE_EMAIL_FROM: 'no-reply@example.com',
+          AUTH_CODE_EMAIL_NICKNAME: 'Production Chat',
+          AUTH_CODE_EMAIL_HANDLE: 'production_chat',
+        }),
+      ),
+    ).toThrow('AUTH_CODE_WEBHOOK_SECRET is required in production');
+  });
+
+  it('should reject non-https webhook urls in production', () => {
+    expect(() =>
+      validateEnv(
+        buildEnv({
+          NODE_ENV: 'production',
+          CORS_ALLOWED_ORIGINS: 'https://chat.example.com',
+          AUTH_CODE_DELIVERY_MODE: 'webhook',
+          AUTH_DEBUG_CODE_ENABLED: 'false',
+          AUTH_CODE_WEBHOOK_URL: 'http://code-provider.example/send',
+          AUTH_CODE_WEBHOOK_SECRET: 'delivery-secret',
+          AUTH_CODE_EMAIL_FROM: 'no-reply@example.com',
+          AUTH_CODE_EMAIL_NICKNAME: 'Production Chat',
+          AUTH_CODE_EMAIL_HANDLE: 'production_chat',
+        }),
+      ),
+    ).toThrow(
+      'AUTH_CODE_WEBHOOK_URL must use https in production webhook mode',
+    );
+  });
+
+  it('should reject TRUST_PROXY=true in production', () => {
+    expect(() =>
+      validateEnv(
+        buildEnv({
+          NODE_ENV: 'production',
+          CORS_ALLOWED_ORIGINS: 'https://chat.example.com',
+          TRUST_PROXY: 'true',
+          AUTH_CODE_DELIVERY_MODE: 'webhook',
+          AUTH_DEBUG_CODE_ENABLED: 'false',
+          AUTH_CODE_WEBHOOK_URL: 'https://code-provider.example/send',
+          AUTH_CODE_WEBHOOK_SECRET: 'delivery-secret',
+          AUTH_CODE_EMAIL_FROM: 'no-reply@example.com',
+          AUTH_CODE_EMAIL_NICKNAME: 'Production Chat',
+          AUTH_CODE_EMAIL_HANDLE: 'production_chat',
+        }),
+      ),
+    ).toThrow(
+      'TRUST_PROXY must use a specific hop count or trusted proxy list in production',
+    );
   });
 
   it('should reject weak JWT placeholder values in production', () => {
@@ -81,6 +142,7 @@ describe('validateEnv', () => {
           AUTH_CODE_DELIVERY_MODE: 'webhook',
           AUTH_DEBUG_CODE_ENABLED: 'false',
           AUTH_CODE_WEBHOOK_URL: 'https://code-provider.example/send',
+          AUTH_CODE_WEBHOOK_SECRET: 'delivery-secret',
           AUTH_CODE_EMAIL_FROM: 'no-reply@example.com',
           AUTH_CODE_EMAIL_NICKNAME: 'Production Chat',
           AUTH_CODE_EMAIL_HANDLE: 'production_chat',
@@ -102,6 +164,7 @@ describe('validateEnv', () => {
           AUTH_CODE_DELIVERY_MODE: 'webhook',
           AUTH_DEBUG_CODE_ENABLED: 'false',
           AUTH_CODE_WEBHOOK_URL: 'https://code-provider.example/send',
+          AUTH_CODE_WEBHOOK_SECRET: 'delivery-secret',
           AUTH_CODE_EMAIL_FROM: 'no-reply@example.com',
           AUTH_CODE_EMAIL_NICKNAME: 'Production Chat',
           AUTH_CODE_EMAIL_HANDLE: 'production_chat',
@@ -123,6 +186,7 @@ describe('validateEnv', () => {
           AUTH_CODE_DELIVERY_MODE: 'webhook',
           AUTH_DEBUG_CODE_ENABLED: 'false',
           AUTH_CODE_WEBHOOK_URL: 'https://code-provider.example/send',
+          AUTH_CODE_WEBHOOK_SECRET: 'delivery-secret',
           AUTH_CODE_EMAIL_FROM: 'no-reply@example.com',
           AUTH_CODE_EMAIL_NICKNAME: 'Production Chat',
           AUTH_CODE_EMAIL_HANDLE: 'production_chat',

@@ -17,6 +17,7 @@ import type { RequestUploadTokenDto } from '../dto/request-upload-token.dto';
 import type { UploadTokenDto } from '../dto/upload-token.dto';
 import { MediaAttachmentRepository } from '../repositories/media-attachment.repository';
 
+import { objectContentMatchesMimeType } from './media-content-sniffer.util';
 import { MediaFilePolicyService } from './media-file-policy.service';
 import { MediaObjectStorageService } from './media-object-storage.service';
 import { MediaProcessingWorkerService } from './media-processing-worker.service';
@@ -28,6 +29,7 @@ import { ChatModelRepository } from '@app/infra/database/repositories/chat-model
 export class MediaService {
   private readonly uploadExpiresInSeconds = 60 * 10;
   private readonly downloadExpiresInSeconds = 60 * 5;
+  private readonly contentInspectBytes = 16 * 1024;
 
   constructor(
     private readonly mediaObjectStorageService: MediaObjectStorageService,
@@ -178,6 +180,18 @@ export class MediaService {
       objectMetadata.sizeBytes !== attachment.sizeBytes
     ) {
       throw new BadRequestException('附件对象大小与申请记录不匹配');
+    }
+
+    const objectHeadBytes = await this.mediaObjectStorageService.readObjectBytes({
+      objectKey: attachment.objectKey,
+      maxBytes: this.contentInspectBytes,
+    });
+
+    if (
+      !objectHeadBytes ||
+      !objectContentMatchesMimeType(attachment.mimeType, objectHeadBytes)
+    ) {
+      throw new BadRequestException('附件对象内容与申请记录不匹配');
     }
 
     attachment.status = 'processing';

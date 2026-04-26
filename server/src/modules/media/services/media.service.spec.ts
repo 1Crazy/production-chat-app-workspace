@@ -17,6 +17,7 @@ class FakeMediaObjectStorageService extends MediaObjectStorageService {
     {
       contentType: string;
       sizeBytes: number;
+      bytes: Buffer;
     }
   >();
 
@@ -32,6 +33,7 @@ class FakeMediaObjectStorageService extends MediaObjectStorageService {
     this.uploadedObjects.set(params.objectKey, {
       contentType: params.mimeType,
       sizeBytes: 1024,
+      bytes: this.buildSampleBytes(params.mimeType),
     });
 
     return {
@@ -78,6 +80,43 @@ class FakeMediaObjectStorageService extends MediaObjectStorageService {
       contentType: object?.contentType ?? null,
       sizeBytes: object?.sizeBytes ?? null,
     };
+  }
+
+  override async readObjectBytes(params: {
+    objectKey: string;
+    maxBytes: number;
+  }): Promise<Buffer | null> {
+    const object = this.uploadedObjects.get(params.objectKey);
+
+    if (!object) {
+      return null;
+    }
+
+    return object.bytes.subarray(0, params.maxBytes);
+  }
+
+  setUploadedObject(params: {
+    objectKey: string;
+    contentType: string;
+    sizeBytes: number;
+    bytes: Buffer;
+  }): void {
+    this.uploadedObjects.set(params.objectKey, {
+      contentType: params.contentType,
+      sizeBytes: params.sizeBytes,
+      bytes: params.bytes,
+    });
+  }
+
+  private buildSampleBytes(mimeType: string): Buffer {
+    switch (mimeType) {
+      case 'image/png':
+        return Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+      case 'application/pdf':
+        return Buffer.from('%PDF-1.7\n');
+      default:
+        return Buffer.from('74657374', 'hex');
+    }
   }
 }
 
@@ -156,8 +195,9 @@ describe('MediaService', () => {
     const rateLimitService = {
       consumeOrThrow: jest.fn().mockResolvedValue(undefined),
     } as unknown as RateLimitService;
+    const mediaObjectStorageService = new FakeMediaObjectStorageService();
     const service = new MediaService(
-      new FakeMediaObjectStorageService(),
+      mediaObjectStorageService,
       mediaAttachmentRepository,
       mediaProcessingWorkerService as unknown as MediaProcessingWorkerService,
       chatModelRepository,
@@ -174,6 +214,7 @@ describe('MediaService', () => {
       chatModelRepository,
       conversation,
       mediaAttachmentRepository,
+      mediaObjectStorageService,
       mediaProcessingWorkerService,
       rateLimitService,
       service,
@@ -343,5 +384,30 @@ describe('MediaService', () => {
         sizeBytes: 1024,
       }),
     ).rejects.toThrow('上传请求过于频繁，请稍后再试');
+  });
+
+  it('should reject confirmUpload when object bytes do not match the claimed mime type', async () => {
+    const fixture = await createFixture();
+    const token = await fixture.service.requestUploadToken('user-1', {
+      purpose: 'chat-message',
+      conversationId: fixture.conversation.id,
+      fileName: 'photo.png',
+      mimeType: 'image/png',
+      sizeBytes: 1024,
+    });
+
+    fixture.mediaObjectStorageService.setUploadedObject({
+      objectKey: token.objectKey,
+      contentType: 'image/png',
+      sizeBytes: 1024,
+      bytes: Buffer.from('%PDF-1.7\n'),
+    });
+
+    await expect(
+      fixture.service.confirmUpload('user-1', {
+        attachmentId: token.attachmentId,
+        objectKey: token.objectKey,
+      }),
+    ).rejects.toThrow('附件对象内容与申请记录不匹配');
   });
 });

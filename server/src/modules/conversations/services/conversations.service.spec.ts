@@ -211,6 +211,37 @@ describe('ConversationsService', () => {
     ).rejects.toThrow('仅支持与好友发起单聊');
   });
 
+  it('should reject high-frequency direct conversation attempts', async () => {
+    const fixture = createFixture();
+    const alice = await fixture.authRepository.createUser({
+      identifier: 'alice@example.com',
+      nickname: 'Alice',
+      handle: 'alice_user',
+    });
+    const bob = await fixture.authRepository.createUser({
+      identifier: 'bob@example.com',
+      nickname: 'Bob',
+      handle: 'bob_user',
+    });
+    await fixture.friendshipRepository.createFriendship({
+      userId: alice.id,
+      friendUserId: bob.id,
+    });
+    (
+      fixture.rateLimitService as unknown as {
+        consumeOrThrow: jest.Mock;
+      }
+    ).consumeOrThrow.mockRejectedValueOnce(
+      new Error('发起私聊过于频繁，请稍后再试'),
+    );
+
+    await expect(
+      fixture.service.createDirectConversation(alice.id, {
+        targetHandle: 'bob_user',
+      }),
+    ).rejects.toThrow('发起私聊过于频繁，请稍后再试');
+  });
+
   it('should allow direct conversations after friendship is created', async () => {
     const fixture = createFixture();
     const alice = await fixture.authRepository.createUser({

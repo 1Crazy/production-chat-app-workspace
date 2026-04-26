@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { InMemoryAuthRepository } from '../repositories/in-memory-auth.repository';
 
 import { AuthCodeDeliveryService } from './auth-code-delivery.service';
@@ -111,6 +113,7 @@ describe('AuthService', () => {
 
     return {
       authRepository,
+      chatGateway,
       rateLimitService,
       service,
     };
@@ -245,6 +248,7 @@ describe('AuthService', () => {
   });
 
   it('should deliver production codes through the configured webhook', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_777_777_777_000);
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue({ ok: true } as Response);
@@ -269,14 +273,16 @@ describe('AuthService', () => {
       'https://code-provider.example/send',
       expect.objectContaining({
         method: 'POST',
-        headers: {
+        headers: expect.objectContaining({
           'content-type': 'application/json',
           authorization: 'Bearer delivery-secret',
-        },
+          'x-chatapp-timestamp': '1777777777000',
+        }),
       }),
     );
     const [, request] = fetchMock.mock.calls[0]!;
     const body = JSON.parse(String((request as RequestInit).body));
+    const headers = (request as RequestInit).headers as Record<string, string>;
     expect(body).toMatchObject({
       identifier: 'alice@example.com',
       purpose: 'reset-password',
@@ -288,8 +294,84 @@ describe('AuthService', () => {
       },
     });
     expect(body.code).toMatch(/^\d{6}$/);
+    expect(headers['x-chatapp-signature']).toBe(
+      `sha256=${createHmac('sha256', 'delivery-secret')
+        .update(`1777777777000.${String((request as RequestInit).body)}`)
+        .digest('hex')}`,
+    );
 
     fetchMock.mockRestore();
+    jest.restoreAllMocks();
+  });
+
+  it('should revoke all active sessions after password reset', async () => {
+    const fixture = createFixture({
+      authRateLimitEnabled: false,
+    });
+    const registerCode = await fixture.service.requestCode({
+      identifier: 'alice@example.com',
+      purpose: 'register',
+    });
+    const registration = await fixture.service.register({
+      identifier: 'alice@example.com',
+      code: requireDebugCode(registerCode),
+      password: 'Alice1234',
+      nickname: 'Alice',
+      deviceName: 'alice-phone',
+    });
+    const secondarySession = await fixture.service.login({
+      identifier: 'alice@example.com',
+      password: 'Alice1234',
+      deviceName: 'alice-ipad',
+    });
+    const resetCode = await fixture.service.requestCode({
+      identifier: 'alice@example.com',
+      purpose: 'reset-password',
+    });
+
+    await expect(
+      fixture.service.resetPassword({
+        identifier: 'alice@example.com',
+        code: requireDebugCode(resetCode),
+        password: 'Alice5678',
+      }),
+    ).resolves.toEqual({
+      success: true,
+    });
+
+    expect(
+      await fixture.authRepository.listActiveSessionsByUserId(
+        registration.user.id,
+      ),
+    ).toEqual([]);
+    await expect(
+      fixture.service.refresh({
+        refreshToken: registration.refreshToken,
+      }),
+    ).rejects.toThrow('刷新会话不存在或已失效');
+    await expect(
+      fixture.service.refresh({
+        refreshToken: secondarySession.refreshToken,
+      }),
+    ).rejects.toThrow('刷新会话不存在或已失效');
+    expect(
+      (fixture.chatGateway as unknown as { disconnectSession: jest.Mock })
+        .disconnectSession,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      (fixture.chatGateway as unknown as { disconnectSession: jest.Mock })
+        .disconnectSession,
+    ).toHaveBeenCalledWith(
+      registration.currentSession.id,
+      'password_reset',
+    );
+    expect(
+      (fixture.chatGateway as unknown as { disconnectSession: jest.Mock })
+        .disconnectSession,
+    ).toHaveBeenCalledWith(
+      secondarySession.currentSession.id,
+      'password_reset',
+    );
   });
 
   it('should require a password reset before legacy code-only accounts can login', async () => {

@@ -198,6 +198,10 @@ export class AuthService {
     );
     user.passwordUpdatedAt = new Date();
     await this.authRepository.saveUser(user);
+    await this.authSessionService.revokeAllSessionsForUser(
+      user.id,
+      'password_reset',
+    );
     return {
       success: true,
     };

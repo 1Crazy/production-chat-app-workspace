@@ -3,10 +3,13 @@ import { Injectable } from '@nestjs/common';
 import type { MediaAttachmentEntity } from '../entities/media-attachment.entity';
 import { MediaAttachmentRepository } from '../repositories/media-attachment.repository';
 
+import { objectContentMatchesMimeType } from './media-content-sniffer.util';
 import { MediaObjectStorageService } from './media-object-storage.service';
 
 @Injectable()
 export class MediaProcessingPipelineService {
+  private readonly contentInspectBytes = 16 * 1024;
+
   constructor(
     private readonly mediaAttachmentRepository: MediaAttachmentRepository,
     private readonly mediaObjectStorageService: MediaObjectStorageService,
@@ -41,6 +44,18 @@ export class MediaProcessingPipelineService {
       objectMetadata.sizeBytes !== attachment.sizeBytes
     ) {
       throw new Error('附件对象大小在异步处理阶段不匹配');
+    }
+
+    const objectHeadBytes = await this.mediaObjectStorageService.readObjectBytes({
+      objectKey: attachment.objectKey,
+      maxBytes: this.contentInspectBytes,
+    });
+
+    if (
+      !objectHeadBytes ||
+      !objectContentMatchesMimeType(attachment.mimeType, objectHeadBytes)
+    ) {
+      throw new Error('附件对象内容在异步处理阶段不匹配');
     }
 
     // 这里先把不同附件类型的后处理入口拆出来，后续接真实缩略图、转码、扫描服务时

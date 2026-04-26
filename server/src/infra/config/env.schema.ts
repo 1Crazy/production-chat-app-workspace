@@ -100,6 +100,10 @@ export function validateEnv(
 
   if (nodeEnv === 'production' && authCodeDeliveryMode === 'webhook') {
     for (const [key, value] of [
+      [
+        'AUTH_CODE_WEBHOOK_SECRET',
+        readOptionalString(rawConfig.AUTH_CODE_WEBHOOK_SECRET),
+      ],
       ['AUTH_CODE_EMAIL_FROM', authCodeEmailFrom],
       ['AUTH_CODE_EMAIL_NICKNAME', authCodeEmailNickname],
       ['AUTH_CODE_EMAIL_HANDLE', authCodeEmailHandle],
@@ -108,6 +112,18 @@ export function validateEnv(
         throw new Error(`${key} is required in production`);
       }
     }
+
+    assertProductionHttpsUrl(
+      'AUTH_CODE_WEBHOOK_URL',
+      authCodeWebhookUrl!,
+      'AUTH_CODE_WEBHOOK_URL must use https in production webhook mode',
+    );
+  }
+
+  if (nodeEnv === 'production' && trustProxy?.trim().toLowerCase() === 'true') {
+    throw new Error(
+      'TRUST_PROXY must use a specific hop count or trusted proxy list in production',
+    );
   }
 
   const corsAllowedOrigins =
@@ -327,5 +343,23 @@ function assertStrongProductionDatabaseUrl(databaseUrl: string): void {
     throw new Error(
       'DATABASE_URL must use a database password with at least 12 characters in production',
     );
+  }
+}
+
+function assertProductionHttpsUrl(
+  key: string,
+  value: string,
+  message: string,
+): void {
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(value);
+  } catch {
+    throw new Error(`${key} must be a valid URL`);
+  }
+
+  if (parsedUrl.protocol !== 'https:') {
+    throw new Error(message);
   }
 }

@@ -26,4 +26,9 @@ export abstract class MediaObjectStorageService {
     contentType: string | null;
     sizeBytes: number | null;
   }>;
+
+  abstract readObjectBytes(params: {
+    objectKey: string;
+    maxBytes: number;
+  }): Promise<Buffer | null>;
 }

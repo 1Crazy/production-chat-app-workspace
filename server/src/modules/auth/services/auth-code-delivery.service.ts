@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 
 import type { VerificationCodePurpose } from '../entities/verification-code.entity';
@@ -40,23 +42,25 @@ export class AuthCodeDeliveryService {
       throw new ServiceUnavailableException('验证码投递通道未配置');
     }
 
+    const body = JSON.stringify({
+      identifier: params.identifier,
+      purpose: params.purpose,
+      code: params.code,
+      expiresInSeconds: params.expiresInSeconds,
+      sender: {
+        email: this.appConfigService.authCodeEmailFrom,
+        nickname: this.appConfigService.authCodeEmailNickname,
+        handle: this.appConfigService.authCodeEmailHandle,
+      },
+    });
+
     try {
       const response = await fetch(webhookUrl, {
         method: 'POST',
-        headers: this.buildWebhookHeaders(),
+        headers: this.buildWebhookHeaders(body),
         // 外部 webhook 必须在 10 秒内响应，防止阻塞验证码投递链路。
         signal: AbortSignal.timeout(10_000),
-        body: JSON.stringify({
-          identifier: params.identifier,
-          purpose: params.purpose,
-          code: params.code,
-          expiresInSeconds: params.expiresInSeconds,
-          sender: {
-            email: this.appConfigService.authCodeEmailFrom,
-            nickname: this.appConfigService.authCodeEmailNickname,
-            handle: this.appConfigService.authCodeEmailHandle,
-          },
-        }),
+        body,
       });
 
       if (response.ok) {
@@ -69,14 +73,22 @@ export class AuthCodeDeliveryService {
     throw new ServiceUnavailableException('验证码投递失败，请稍后再试');
   }
 
-  private buildWebhookHeaders(): Record<string, string> {
+  private buildWebhookHeaders(body: string): Record<string, string> {
     const headers: Record<string, string> = {
       'content-type': 'application/json',
     };
     const secret = this.appConfigService.authCodeWebhookSecret;
 
     if (secret) {
+      const timestamp = String(Date.now());
       headers.authorization = `Bearer ${secret}`;
+      headers['x-chatapp-timestamp'] = timestamp;
+      headers['x-chatapp-signature'] = `sha256=${createHmac(
+        'sha256',
+        secret,
+      )
+        .update(`${timestamp}.${body}`)
+        .digest('hex')}`;
     }
 
     return headers;
