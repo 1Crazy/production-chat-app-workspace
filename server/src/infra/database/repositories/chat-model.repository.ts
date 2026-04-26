@@ -55,6 +55,7 @@ export abstract class ChatModelRepository {
     type: MessageType;
     status?: MessageStatus;
     content: Record<string, unknown>;
+    failureReason?: string | null;
   }): Promise<MessageEntity>;
 
   abstract findMessageByClientKey(params: {

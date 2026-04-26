@@ -171,13 +171,13 @@ class _ConversationListPageState extends State<ConversationListPage> {
                   child: RefreshIndicator(
                     onRefresh: () => _controller.load(silent: true),
                     child: ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                      padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
                       itemCount: filteredItems.isEmpty
                           ? 1
                           : filteredItems.length,
                       separatorBuilder: (context, index) => const Divider(
                         height: 1,
-                        indent: 68,
+                        indent: 84,
                         color: Color(0xFFF1F3F7),
                       ),
                       itemBuilder: (context, index) {
@@ -292,17 +292,15 @@ class _ConversationListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.zero,
       child: Ink(
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFF7F9FD) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
         ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Row(
               children: [
                 _ConversationAvatar(item: item),

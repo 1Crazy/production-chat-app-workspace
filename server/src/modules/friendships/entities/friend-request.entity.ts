@@ -8,8 +8,11 @@ export interface FriendRequestEntity {
   addresseeId: string;
   status: FriendRequestStatus;
   message: string | null;
+  rejectReason: string | null;
   createdAt: Date;
   updatedAt: Date;
   respondedAt: Date | null;
   ignoredByAddresseeAt: Date | null;
+  hiddenByRequesterAt: Date | null;
+  hiddenByAddresseeAt: Date | null;
 }

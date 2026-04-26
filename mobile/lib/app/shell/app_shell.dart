@@ -81,7 +81,7 @@ class _AppShellState extends State<AppShell> {
         return;
       }
 
-      await AuthScope.of(context).logout();
+      await AuthScope.of(context).handleSessionRevoked();
     });
     _connectionStateSubscription = _chatRealtime?.connectionStateStream.listen((
       state,
@@ -144,10 +144,7 @@ class _AppShellState extends State<AppShell> {
                 await _showConversationComposerSheet(accessToken);
               },
               onConversationSelected: (conversation) {
-                setState(() {
-                  _selectedConversation = conversation;
-                  _currentIndex = 0;
-                });
+                _activateConversation(conversation);
               },
             )
           : ChatPage(
@@ -219,20 +216,22 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FC),
       body: IndexedStack(index: _currentIndex, children: pages),
-      bottomNavigationBar: _ShellBottomBar(
-        currentIndex: _currentIndex,
-        messageUnreadCount: _totalUnreadCount,
-        contactBadgeCount: _pendingFriendRequestCount,
-        onSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-            if (index != 0) {
-              _selectedConversation = null;
-            }
-          });
-          unawaited(_refreshFriendRequestCount(accessToken));
-        },
-      ),
+      bottomNavigationBar: _selectedConversation != null
+          ? null
+          : _ShellBottomBar(
+              currentIndex: _currentIndex,
+              messageUnreadCount: _totalUnreadCount,
+              contactBadgeCount: _pendingFriendRequestCount,
+              onSelected: (index) {
+                setState(() {
+                  _currentIndex = index;
+                  if (index != 0) {
+                    _selectedConversation = null;
+                  }
+                });
+                unawaited(_refreshFriendRequestCount(accessToken));
+              },
+            ),
     );
   }
 

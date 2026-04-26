@@ -15,6 +15,7 @@ export interface MessageView {
   status: MessageStatus;
   sequence: number;
   content: Record<string, unknown>;
+  failureReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -38,6 +39,7 @@ export function toMessageView(
     status: message.status,
     sequence: message.sequence,
     content: message.content,
+    failureReason: message.failureReason,
     createdAt: message.createdAt.toISOString(),
     updatedAt: message.updatedAt.toISOString(),
   };

@@ -2,6 +2,8 @@ export interface FriendshipEntity {
   id: string;
   userAId: string;
   userBId: string;
+  hiddenByUserAAt: Date | null;
+  hiddenByUserBAt: Date | null;
   createdAt: Date;
 }
 

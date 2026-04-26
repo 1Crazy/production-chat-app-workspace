@@ -29,10 +29,12 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('注册'));
+    await tester.tap(find.text('注册').first);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.enterText(find.byType(TextField).at(0), 'demo_user');
+    await tester.enterText(find.byType(TextField).at(1), 'Demo User');
     await tester.enterText(find.byType(TextField).at(2), 'Demo12345');
+    await tester.pump();
     await tester.tap(find.text('获取验证码'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -600));
@@ -58,10 +60,12 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('注册'));
+      await tester.tap(find.text('注册').first);
       await tester.pump(const Duration(milliseconds: 300));
       await tester.enterText(find.byType(TextField).at(0), 'demo_user');
+      await tester.enterText(find.byType(TextField).at(1), 'Demo User');
       await tester.enterText(find.byType(TextField).at(2), 'Demo12345');
+      await tester.pump();
       await tester.tap(find.text('获取验证码'));
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -88,11 +92,39 @@ void main() {
 
     await tester.enterText(find.byType(TextField).at(0), 'demo_user');
     await tester.enterText(find.byType(TextField).at(1), 'demo12345');
+    await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, '登录'));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('登录失败'), findsOneWidget);
   });
+
+  testWidgets(
+    'login page shows inline errors and blocks invalid login submit',
+    (tester) async {
+      final authRepository = _FakeAuthRepository();
+      final controller = AuthController(
+        authRepository: authRepository,
+        pushRegistrationService: _FakePushRegistrationService(),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AuthScope(controller: controller, child: const LoginPage()),
+        ),
+      );
+
+      final loginButton = find.widgetWithText(FilledButton, '登录');
+      expect(tester.widget<FilledButton>(loginButton).onPressed, isNotNull);
+
+      await tester.tap(loginButton);
+      await tester.pump();
+
+      expect(authRepository.loginCalls, 0);
+      expect(find.text('请先输入账号或邮箱'), findsOneWidget);
+      expect(find.text('请输入密码'), findsOneWidget);
+    },
+  );
 
   testWidgets('login page can reset password and return to login mode', (
     tester,
@@ -114,9 +146,11 @@ void main() {
 
     await tester.enterText(find.byType(TextField).at(0), 'demo_user');
     await tester.enterText(find.byType(TextField).at(1), 'Reset1234');
+    await tester.pump();
     await tester.tap(find.text('获取验证码'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.enterText(find.byType(TextField).at(2), '246810');
+    await tester.pump();
     await tester.tap(find.text('确认重置密码'));
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -129,32 +163,75 @@ void main() {
     expect(find.widgetWithText(FilledButton, '登录'), findsOneWidget);
   });
 
-  testWidgets('login page blocks code request until password format is valid', (
-    tester,
-  ) async {
-    final authRepository = _FakeAuthRepository();
-    final controller = AuthController(
-      authRepository: authRepository,
-      pushRegistrationService: _FakePushRegistrationService(),
-    );
+  testWidgets(
+    'login page shows inline errors and blocks invalid code request',
+    (tester) async {
+      final authRepository = _FakeAuthRepository();
+      final controller = AuthController(
+        authRepository: authRepository,
+        pushRegistrationService: _FakePushRegistrationService(),
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AuthScope(controller: controller, child: const LoginPage()),
-      ),
-    );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AuthScope(controller: controller, child: const LoginPage()),
+        ),
+      );
 
-    await tester.tap(find.text('注册'));
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.enterText(find.byType(TextField).at(0), 'demo_user');
-    await tester.enterText(find.byType(TextField).at(2), 'short');
+      await tester.tap(find.text('注册').first);
+      await tester.pump(const Duration(milliseconds: 300));
+      final requestCodeButton = find.widgetWithText(TextButton, '获取验证码');
 
-    await tester.tap(find.text('获取验证码'));
-    await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.widget<TextButton>(requestCodeButton).onPressed, isNotNull);
 
-    expect(authRepository.requestedIdentifiers, isEmpty);
-    expect(find.text('请先输入至少 8 位的密码，再获取验证码'), findsOneWidget);
-  });
+      await tester.tap(requestCodeButton);
+      await tester.pump();
+
+      expect(authRepository.requestedIdentifiers, isEmpty);
+      expect(find.text('请先输入账号或邮箱'), findsOneWidget);
+      expect(find.text('请先输入昵称'), findsOneWidget);
+      expect(find.text('请先输入密码，再获取验证码'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'login page shows inline errors and blocks invalid register submit',
+    (tester) async {
+      final authRepository = _FakeAuthRepository();
+      final controller = AuthController(
+        authRepository: authRepository,
+        pushRegistrationService: _FakePushRegistrationService(),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AuthScope(controller: controller, child: const LoginPage()),
+        ),
+      );
+
+      await tester.tap(find.text('注册').first);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.scrollUntilVisible(
+        find.byType(FilledButton),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      final registerButton = find.byType(FilledButton).first;
+      expect(tester.widget<FilledButton>(registerButton).onPressed, isNotNull);
+
+      await tester.tap(registerButton);
+      await tester.pump();
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, 600));
+      await tester.pump();
+
+      expect(authRepository.registerCalls, 0);
+      expect(find.text('请先输入账号或邮箱'), findsOneWidget);
+      expect(find.text('请先输入昵称'), findsOneWidget);
+      expect(find.text('请输入密码'), findsOneWidget);
+      expect(find.text('请输入验证码'), findsAtLeastNWidgets(2));
+    },
+  );
 
   testWidgets('login page clears input values when switching modes', (
     tester,
@@ -174,7 +251,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(0), 'demo_user');
     await tester.enterText(find.byType(TextField).at(1), 'Demo1234');
 
-    await tester.tap(find.text('注册'));
+    await tester.tap(find.text('注册').first);
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('demo_user'), findsNothing);
@@ -189,6 +266,8 @@ class _FakeAuthRepository implements AuthRepository {
   final String? debugCode;
   final List<String> requestedIdentifiers = [];
   final List<AuthCodePurpose> requestedPurposes = [];
+  int loginCalls = 0;
+  int registerCalls = 0;
   int resetPasswordCalls = 0;
 
   @override
@@ -200,6 +279,8 @@ class _FakeAuthRepository implements AuthRepository {
     required String password,
     String? deviceName,
   }) async {
+    loginCalls += 1;
+
     if (loginError != null) {
       throw loginError!;
     }
@@ -238,6 +319,7 @@ class _FakeAuthRepository implements AuthRepository {
     required String nickname,
     String? deviceName,
   }) async {
+    registerCalls += 1;
     return _buildSession(deviceName: deviceName ?? 'flutter-mobile');
   }
 

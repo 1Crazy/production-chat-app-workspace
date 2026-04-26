@@ -30,9 +30,8 @@ class FriendshipRemoteDataSource {
 
     return response
         .map(
-          (item) => FriendRequestSummaryDto.fromJson(
-            item as Map<String, dynamic>,
-          ),
+          (item) =>
+              FriendRequestSummaryDto.fromJson(item as Map<String, dynamic>),
         )
         .toList(growable: false);
   }
@@ -58,9 +57,8 @@ class FriendshipRemoteDataSource {
 
     return response
         .map(
-          (item) => FriendRequestSummaryDto.fromJson(
-            item as Map<String, dynamic>,
-          ),
+          (item) =>
+              FriendRequestSummaryDto.fromJson(item as Map<String, dynamic>),
         )
         .toList(growable: false);
   }
@@ -100,9 +98,7 @@ class FriendshipRemoteDataSource {
     );
   }
 
-  Future<void> markIncomingRequestsViewed({
-    required String accessToken,
-  }) async {
+  Future<void> markIncomingRequestsViewed({required String accessToken}) async {
     await _apiClient.postJson(
       '/friendships/requests/mark-viewed',
       accessToken: accessToken,
@@ -112,9 +108,24 @@ class FriendshipRemoteDataSource {
   Future<void> rejectFriendRequest({
     required String accessToken,
     required String requestId,
+    String? rejectReason,
   }) async {
     await _apiClient.postJson(
       '/friendships/requests/$requestId/reject',
+      accessToken: accessToken,
+      body: {
+        if (rejectReason != null && rejectReason.trim().isNotEmpty)
+          'rejectReason': rejectReason,
+      },
+    );
+  }
+
+  Future<void> deleteFriendRequestRecord({
+    required String accessToken,
+    required String requestId,
+  }) async {
+    await _apiClient.deleteJson(
+      '/friendships/requests/$requestId',
       accessToken: accessToken,
     );
   }

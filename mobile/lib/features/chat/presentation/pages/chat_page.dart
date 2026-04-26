@@ -45,6 +45,8 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   late ChatController _controller;
   late TextEditingController _composerController;
+  late ScrollController _messageScrollController;
+  late ScrollController _composerScrollController;
   bool _showQuickPanel = false;
 
   @override
@@ -57,6 +59,8 @@ class _ChatPageState extends State<ChatPage> {
       currentUserId: widget.currentUserId,
     );
     _composerController = TextEditingController();
+    _messageScrollController = ScrollController();
+    _composerScrollController = ScrollController();
     _syncSelectedConversation(initial: true);
   }
 
@@ -97,6 +101,8 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void dispose() {
     _composerController.dispose();
+    _composerScrollController.dispose();
+    _messageScrollController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -112,6 +118,7 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     await _controller.openConversation(conversation);
+    _scrollToLatestAfterBuild();
     widget.onConversationChanged();
   }
 
@@ -127,12 +134,16 @@ class _ChatPageState extends State<ChatPage> {
       _showQuickPanel = false;
     });
     await _controller.updateTypingDraft('');
-    await _controller.sendText(text);
+    final sendFuture = _controller.sendText(text);
+    _scrollToLatestAfterBuild(animated: true);
+    await sendFuture;
+    _scrollToLatestAfterBuild(animated: true);
     widget.onConversationChanged();
   }
 
   Future<void> _refreshActiveConversation() async {
     await _controller.refreshGapSync();
+    _scrollToLatestAfterBuild(animated: true);
     widget.onConversationChanged();
   }
 
@@ -161,6 +172,7 @@ class _ChatPageState extends State<ChatPage> {
                 child: _controller.isInitialLoading
                     ? const Center(child: CircularProgressIndicator())
                     : ListView.builder(
+                        controller: _messageScrollController,
                         padding: const EdgeInsets.fromLTRB(14, 6, 14, 18),
                         itemCount: _controller.messages.length,
                         itemBuilder: (context, index) {
@@ -254,16 +266,27 @@ class _ChatPageState extends State<ChatPage> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Container(
-                                height: 36,
+                                constraints: const BoxConstraints(
+                                  minHeight: 40,
+                                  maxHeight: 224,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF5F6FA),
                                   borderRadius: BorderRadius.circular(18),
                                 ),
                                 child: TextField(
                                   controller: _composerController,
+                                  scrollController: _composerScrollController,
                                   minLines: 1,
-                                  maxLines: 3,
+                                  maxLines: 11,
+                                  keyboardType: TextInputType.multiline,
+                                  textAlignVertical: TextAlignVertical.center,
                                   textInputAction: TextInputAction.send,
+                                  style: const TextStyle(height: 1.2),
+                                  strutStyle: const StrutStyle(
+                                    height: 1.2,
+                                    forceStrutHeight: true,
+                                  ),
                                   onChanged: (value) {
                                     if (_showQuickPanel && value.isNotEmpty) {
                                       setState(() {
@@ -277,13 +300,15 @@ class _ChatPageState extends State<ChatPage> {
                                   },
                                   decoration: const InputDecoration(
                                     hintText: '输入消息...',
+                                    hintStyle: TextStyle(height: 1.2),
+                                    isDense: true,
                                     filled: false,
                                     border: InputBorder.none,
                                     enabledBorder: InputBorder.none,
                                     focusedBorder: InputBorder.none,
                                     contentPadding: EdgeInsets.symmetric(
                                       horizontal: 14,
-                                      vertical: 8,
+                                      vertical: 10,
                                     ),
                                   ),
                                 ),
@@ -368,8 +393,8 @@ class _ChatPageState extends State<ChatPage> {
     BuildContext context,
     ChatReadReceiptMember member,
   ) async {
-    final handle = await Navigator.of(context).push<String?>(
-      MaterialPageRoute<String?>(
+    final result = await Navigator.of(context).push<Object?>(
+      MaterialPageRoute<Object?>(
         builder: (context) {
           return RelationshipProfilePage(
             handle: member.handle,
@@ -380,10 +405,35 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
 
-    if (!mounted || handle == null) {
+    if (!mounted || result == null || result == true) {
       return;
     }
 
-    await widget.onOpenDirectConversation(handle);
+    if (result is! String) {
+      return;
+    }
+
+    await widget.onOpenDirectConversation(result);
+  }
+
+  void _scrollToLatestAfterBuild({bool animated = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_messageScrollController.hasClients) {
+        return;
+      }
+
+      final targetOffset = _messageScrollController.position.maxScrollExtent;
+
+      if (animated) {
+        _messageScrollController.animateTo(
+          targetOffset,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
+        return;
+      }
+
+      _messageScrollController.jumpTo(targetOffset);
+    });
   }
 }

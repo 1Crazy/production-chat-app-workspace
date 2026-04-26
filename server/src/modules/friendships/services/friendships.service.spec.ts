@@ -50,6 +50,7 @@ describe('FriendshipsService', () => {
     );
 
     expect(request.direction).toBe('outgoing');
+    expect(request.rejectReason).toBeNull();
     expect(relationship).toMatchObject({
       status: 'outgoing_pending',
       pendingRequestId: request.id,
@@ -109,5 +110,95 @@ describe('FriendshipsService', () => {
     expect(outgoing[0]?.status).toBe('pending');
     expect(incoming).toHaveLength(1);
     expect(incoming[0]?.status).toBe('ignored');
+  });
+
+  it('should persist reject reasons on rejected requests', async () => {
+    const fixture = createFixture();
+    const alice = await fixture.authRepository.createUser({
+      identifier: 'alice@example.com',
+      nickname: 'Alice',
+      handle: 'alice_user',
+    });
+    const bob = await fixture.authRepository.createUser({
+      identifier: 'bob@example.com',
+      nickname: 'Bob',
+      handle: 'bob_user',
+    });
+    const request = await fixture.service.createFriendRequest(alice.id, {
+      targetHandle: 'bob_user',
+      message: 'hi',
+    });
+
+    await fixture.service.rejectFriendRequestWithReason(bob.id, request.id, {
+      rejectReason: '暂时不方便',
+    });
+
+    const outgoing = await fixture.service.listOutgoingRequests(alice.id);
+
+    expect(outgoing[0]?.status).toBe('rejected');
+    expect(outgoing[0]?.rejectReason).toBe('暂时不方便');
+  });
+
+  it('should hide a friend request record for the current viewer only', async () => {
+    const fixture = createFixture();
+    const alice = await fixture.authRepository.createUser({
+      identifier: 'alice@example.com',
+      nickname: 'Alice',
+      handle: 'alice_user',
+    });
+    const bob = await fixture.authRepository.createUser({
+      identifier: 'bob@example.com',
+      nickname: 'Bob',
+      handle: 'bob_user',
+    });
+    const request = await fixture.service.createFriendRequest(alice.id, {
+      targetHandle: 'bob_user',
+      message: 'hi',
+    });
+
+    await fixture.service.deleteFriendRequestRecord(alice.id, request.id);
+
+    const outgoing = await fixture.service.listOutgoingRequests(alice.id);
+    const incoming = await fixture.service.listIncomingRequests(bob.id);
+    const relationship = await fixture.service.getRelationshipByUserIds(
+      alice.id,
+      bob.id,
+    );
+
+    expect(outgoing).toHaveLength(0);
+    expect(incoming).toHaveLength(1);
+    expect(relationship.status).toBe('outgoing_pending');
+  });
+
+  it('should hide a deleted friend from one side only', async () => {
+    const fixture = createFixture();
+    const alice = await fixture.authRepository.createUser({
+      identifier: 'alice@example.com',
+      nickname: 'Alice',
+      handle: 'alice_user',
+    });
+    const bob = await fixture.authRepository.createUser({
+      identifier: 'bob@example.com',
+      nickname: 'Bob',
+      handle: 'bob_user',
+    });
+
+    await fixture.friendshipRepository.createFriendship({
+      userId: alice.id,
+      friendUserId: bob.id,
+    });
+    await fixture.service.removeFriend(alice.id, bob.id);
+
+    const aliceFriends = await fixture.service.listFriends(alice.id);
+    const bobFriends = await fixture.service.listFriends(bob.id);
+    const relationship = await fixture.service.getRelationshipByUserIds(
+      alice.id,
+      bob.id,
+    );
+
+    expect(aliceFriends).toHaveLength(0);
+    expect(bobFriends).toHaveLength(1);
+    expect(bobFriends[0]?.profile.handle).toBe('alice_user');
+    expect(relationship.status).toBe('none');
   });
 });

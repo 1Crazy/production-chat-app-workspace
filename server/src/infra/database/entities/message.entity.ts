@@ -10,6 +10,7 @@ export interface MessageEntity {
   status: MessageStatus;
   sequence: number;
   content: Record<string, unknown>;
+  failureReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

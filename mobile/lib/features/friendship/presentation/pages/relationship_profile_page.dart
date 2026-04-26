@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:production_chat_app/app/dependencies/app_dependencies_scope.dart';
 import 'package:production_chat_app/features/auth/application/auth_scope.dart';
 import 'package:production_chat_app/features/friendship/application/relationship_profile_controller.dart';
+import 'package:production_chat_app/features/friendship/domain/entities/friend_request_summary.dart';
 import 'package:production_chat_app/features/friendship/domain/entities/friendship_status.dart';
 import 'package:production_chat_app/shared/widgets/status_surfaces.dart';
 
@@ -12,11 +13,13 @@ class RelationshipProfilePage extends StatefulWidget {
     required this.handle,
     required this.displayName,
     this.avatarUrl,
+    this.initialRequest,
   });
 
   final String handle;
   final String displayName;
   final String? avatarUrl;
+  final FriendRequestSummary? initialRequest;
 
   @override
   State<RelationshipProfilePage> createState() =>
@@ -71,6 +74,7 @@ class _RelationshipProfilePageState extends State<RelationshipProfilePage> {
         final handle = profile?.handle ?? widget.handle;
         final avatarUrl = profile?.avatarUrl ?? widget.avatarUrl;
         final status = relationship?.status ?? FriendshipStatus.none;
+        final activeRequest = widget.initialRequest;
 
         return Scaffold(
           backgroundColor: Colors.white,
@@ -148,13 +152,18 @@ class _RelationshipProfilePageState extends State<RelationshipProfilePage> {
                       ? '可被搜索'
                       : '不可被搜索',
                 ),
+                if (activeRequest != null) ...[
+                  const SizedBox(height: 14),
+                  _RequestHistoryCard(request: activeRequest),
+                ],
                 const SizedBox(height: 18),
                 ..._buildActionSection(
                   controller: controller,
                   status: status,
                   handle: handle,
                   friendUserId: profile?.id,
-                  pendingRequestId: relationship?.pendingRequestId,
+                  pendingRequestId:
+                      relationship?.pendingRequestId ?? activeRequest?.id,
                 ),
               ],
             ),
@@ -230,9 +239,14 @@ class _RelationshipProfilePageState extends State<RelationshipProfilePage> {
                 : () async {
                     await controller.removeFriend(
                       accessToken: accessToken,
-                      handle: handle,
                       friendUserId: friendUserId,
                     );
+
+                    if (!mounted || controller.errorMessage != null) {
+                      return;
+                    }
+
+                    Navigator.of(context).pop(true);
                   },
             child: const Text(
               '删除好友',
@@ -248,9 +262,17 @@ class _RelationshipProfilePageState extends State<RelationshipProfilePage> {
               onPressed: controller.isLoading
                   ? null
                   : () async {
+                      final requestMessage =
+                          await _showFriendRequestMessageComposer();
+
+                      if (requestMessage == null) {
+                        return;
+                      }
+
                       await controller.sendFriendRequest(
                         accessToken: accessToken,
                         handle: handle,
+                        message: requestMessage,
                       );
                     },
               child: const Text('添加好友'),
@@ -288,13 +310,21 @@ class _RelationshipProfilePageState extends State<RelationshipProfilePage> {
                   onPressed: controller.isLoading || pendingRequestId == null
                       ? null
                       : () async {
+                          final rejectReason =
+                              await _showRejectReasonComposer();
+
+                          if (rejectReason == null) {
+                            return;
+                          }
+
                           await controller.rejectRequest(
                             accessToken: accessToken,
                             handle: handle,
                             requestId: pendingRequestId,
+                            rejectReason: rejectReason,
                           );
                         },
-                  child: const Text('忽略'),
+                  child: const Text('拒绝'),
                 ),
               ),
             ],
@@ -318,6 +348,112 @@ class _RelationshipProfilePageState extends State<RelationshipProfilePage> {
       case FriendshipStatus.friends:
         return '已是好友';
     }
+  }
+
+  Future<String?> _showFriendRequestMessageComposer() async {
+    final controller = TextEditingController();
+
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                8,
+                20,
+                20 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('申请备注', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: controller,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: '可以简单介绍一下自己，选填',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () {
+                        Navigator.of(context).pop(controller.text.trim());
+                      },
+                      child: const Text('发送申请'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    return result;
+  }
+
+  Future<String?> _showRejectReasonComposer() async {
+    final controller = TextEditingController();
+
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                8,
+                20,
+                20 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('拒绝理由', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: controller,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: '可以给对方留一句说明，选填',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () {
+                        Navigator.of(context).pop(controller.text.trim());
+                      },
+                      child: const Text('确认拒绝'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    return result;
   }
 }
 
@@ -378,5 +514,70 @@ class _InfoTile extends StatelessWidget {
       title: Text(title),
       subtitle: Text(subtitle),
     );
+  }
+}
+
+class _RequestHistoryCard extends StatelessWidget {
+  const _RequestHistoryCard({required this.request});
+
+  final FriendRequestSummary request;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF0F2F7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('申请记录', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Text(
+            _statusLabel(request),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: const Color(0xFF98A2B3)),
+          ),
+          if (request.message != null &&
+              request.message!.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('备注', style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 4),
+            Text(request.message!),
+          ],
+          if (request.rejectReason != null &&
+              request.rejectReason!.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('拒绝理由', style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 4),
+            Text(request.rejectReason!),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _statusLabel(FriendRequestSummary request) {
+    switch (request.status) {
+      case 'accepted':
+        return request.direction == FriendRequestDirection.outgoing
+            ? '对方已通过你的申请'
+            : '你已通过这条申请';
+      case 'rejected':
+        return request.direction == FriendRequestDirection.outgoing
+            ? '对方已拒绝你的申请'
+            : '你已拒绝这条申请';
+      case 'ignored':
+        return '这条申请已忽略';
+      case 'pending':
+      default:
+        return request.direction == FriendRequestDirection.outgoing
+            ? '等待对方处理'
+            : '等待你处理';
+    }
   }
 }

@@ -8,6 +8,7 @@ class FriendRequestSummary {
     required this.direction,
     required this.status,
     required this.message,
+    required this.rejectReason,
     required this.createdAt,
     required this.respondedAt,
     required this.counterparty,
@@ -17,6 +18,7 @@ class FriendRequestSummary {
   final FriendRequestDirection direction;
   final String status;
   final String? message;
+  final String? rejectReason;
   final DateTime createdAt;
   final DateTime? respondedAt;
   final FriendUserProfile counterparty;

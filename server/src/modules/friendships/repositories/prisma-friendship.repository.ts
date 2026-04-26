@@ -27,7 +27,10 @@ export class PrismaFriendshipRepository extends FriendshipRepository {
         requesterId: params.requesterId,
         addresseeId: params.addresseeId,
         message: params.message ?? null,
+        rejectReason: null,
         ignoredByAddresseeAt: null,
+        hiddenByRequesterAt: null,
+        hiddenByAddresseeAt: null,
       },
     });
 
@@ -42,8 +45,11 @@ export class PrismaFriendshipRepository extends FriendshipRepository {
       data: {
         status: entity.status,
         message: entity.message,
+        rejectReason: entity.rejectReason,
         respondedAt: entity.respondedAt,
         ignoredByAddresseeAt: entity.ignoredByAddresseeAt,
+        hiddenByRequesterAt: entity.hiddenByRequesterAt,
+        hiddenByAddresseeAt: entity.hiddenByAddresseeAt,
       },
     });
   }
@@ -96,6 +102,7 @@ export class PrismaFriendshipRepository extends FriendshipRepository {
         addresseeId: userId,
         status: 'pending',
         ignoredByAddresseeAt: null,
+        hiddenByAddresseeAt: null,
       },
       orderBy: {
         createdAt: 'desc',
@@ -111,6 +118,7 @@ export class PrismaFriendshipRepository extends FriendshipRepository {
     const requests = await this.prismaService.friendRequest.findMany({
       where: {
         addresseeId: userId,
+        hiddenByAddresseeAt: null,
       },
       orderBy: {
         createdAt: 'desc',
@@ -146,6 +154,7 @@ export class PrismaFriendshipRepository extends FriendshipRepository {
     const requests = await this.prismaService.friendRequest.findMany({
       where: {
         requesterId: userId,
+        hiddenByRequesterAt: null,
       },
       orderBy: {
         createdAt: 'desc',
@@ -187,7 +196,36 @@ export class PrismaFriendshipRepository extends FriendshipRepository {
       create: pair,
     });
 
+    if (friendship.hiddenByUserAAt != null || friendship.hiddenByUserBAt != null) {
+      const restored = await this.prismaService.friendship.update({
+        where: {
+          userAId_userBId: pair,
+        },
+        data: {
+          hiddenByUserAAt: null,
+          hiddenByUserBAt: null,
+        },
+      });
+
+      return this.toFriendshipEntity(restored);
+    }
+
     return this.toFriendshipEntity(friendship);
+  }
+
+  override async saveFriendship(entity: FriendshipEntity): Promise<void> {
+    await this.prismaService.friendship.update({
+      where: {
+        userAId_userBId: {
+          userAId: entity.userAId,
+          userBId: entity.userBId,
+        },
+      },
+      data: {
+        hiddenByUserAAt: entity.hiddenByUserAAt,
+        hiddenByUserBAt: entity.hiddenByUserBAt,
+      },
+    });
   }
 
   override async findFriendshipByUserIds(params: {
@@ -209,7 +247,10 @@ export class PrismaFriendshipRepository extends FriendshipRepository {
   ): Promise<FriendshipEntity[]> {
     const friendships = await this.prismaService.friendship.findMany({
       where: {
-        OR: [{ userAId: userId }, { userBId: userId }],
+        OR: [
+          { userAId: userId, hiddenByUserAAt: null },
+          { userBId: userId, hiddenByUserBAt: null },
+        ],
       },
       orderBy: {
         createdAt: 'desc',
@@ -224,8 +265,17 @@ export class PrismaFriendshipRepository extends FriendshipRepository {
     friendUserId: string;
   }): Promise<boolean> {
     const pair = normalizeFriendshipPair(params.userId, params.friendUserId);
-    const deleted = await this.prismaService.friendship.deleteMany({
-      where: pair,
+    const deleted = await this.prismaService.friendship.updateMany({
+      where: {
+        ...pair,
+        ...(params.userId === pair.userAId
+            ? { hiddenByUserAAt: null }
+            : { hiddenByUserBAt: null }),
+      },
+      data:
+        params.userId === pair.userAId
+            ? { hiddenByUserAAt: new Date() }
+            : { hiddenByUserBAt: new Date() },
     });
 
     return deleted.count > 0;
@@ -238,10 +288,13 @@ export class PrismaFriendshipRepository extends FriendshipRepository {
       addresseeId: request.addresseeId,
       status: request.status as FriendRequestEntity['status'],
       message: request.message,
+      rejectReason: request.rejectReason,
       createdAt: request.createdAt,
       updatedAt: request.updatedAt,
       respondedAt: request.respondedAt,
       ignoredByAddresseeAt: request.ignoredByAddresseeAt,
+      hiddenByRequesterAt: request.hiddenByRequesterAt,
+      hiddenByAddresseeAt: request.hiddenByAddresseeAt,
     };
   }
 
@@ -250,6 +303,8 @@ export class PrismaFriendshipRepository extends FriendshipRepository {
       id: friendship.id,
       userAId: friendship.userAId,
       userBId: friendship.userBId,
+      hiddenByUserAAt: friendship.hiddenByUserAAt,
+      hiddenByUserBAt: friendship.hiddenByUserBAt,
       createdAt: friendship.createdAt,
     };
   }

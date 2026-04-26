@@ -62,11 +62,11 @@ extension _ChatControllerMessageState on ChatController {
   int _deliveryScore(ChatMessageDeliveryState state) {
     switch (state) {
       case ChatMessageDeliveryState.failed:
-        return 1;
-      case ChatMessageDeliveryState.sending:
-        return 2;
-      case ChatMessageDeliveryState.sent:
         return 3;
+      case ChatMessageDeliveryState.sending:
+        return 1;
+      case ChatMessageDeliveryState.sent:
+        return 2;
     }
   }
 

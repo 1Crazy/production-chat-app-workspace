@@ -37,11 +37,13 @@ class RelationshipProfileController extends ChangeNotifier {
   Future<void> sendFriendRequest({
     required String accessToken,
     required String handle,
+    String? message,
   }) async {
     await _runMutation(() async {
       await _friendshipRepository.createFriendRequest(
         accessToken: accessToken,
         targetHandle: handle,
+        message: message,
       );
       await load(accessToken: accessToken, handle: handle);
     });
@@ -65,11 +67,13 @@ class RelationshipProfileController extends ChangeNotifier {
     required String accessToken,
     required String handle,
     required String requestId,
+    String? rejectReason,
   }) async {
     await _runMutation(() async {
       await _friendshipRepository.rejectFriendRequest(
         accessToken: accessToken,
         requestId: requestId,
+        rejectReason: rejectReason,
       );
       await load(accessToken: accessToken, handle: handle);
     });
@@ -77,7 +81,6 @@ class RelationshipProfileController extends ChangeNotifier {
 
   Future<void> removeFriend({
     required String accessToken,
-    required String handle,
     required String friendUserId,
   }) async {
     await _runMutation(() async {
@@ -85,7 +88,6 @@ class RelationshipProfileController extends ChangeNotifier {
         accessToken: accessToken,
         friendUserId: friendUserId,
       );
-      await load(accessToken: accessToken, handle: handle);
     });
   }
 

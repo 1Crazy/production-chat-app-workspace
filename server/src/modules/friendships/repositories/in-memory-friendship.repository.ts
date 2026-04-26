@@ -24,10 +24,13 @@ export class InMemoryFriendshipRepository extends FriendshipRepository {
       addresseeId: params.addresseeId,
       status: 'pending',
       message: params.message ?? null,
+      rejectReason: null,
       createdAt: now,
       updatedAt: now,
       respondedAt: null,
       ignoredByAddresseeAt: null,
+      hiddenByRequesterAt: null,
+      hiddenByAddresseeAt: null,
     };
 
     this.requestsById.set(request.id, request);
@@ -77,7 +80,8 @@ export class InMemoryFriendshipRepository extends FriendshipRepository {
       .filter((request) => {
         return request.addresseeId === userId &&
             request.status === 'pending' &&
-            request.ignoredByAddresseeAt == null;
+            request.ignoredByAddresseeAt == null &&
+            request.hiddenByAddresseeAt == null;
       })
       .sort((left, right) => {
         return right.createdAt.getTime() - left.createdAt.getTime();
@@ -90,6 +94,9 @@ export class InMemoryFriendshipRepository extends FriendshipRepository {
     return Array.from(this.requestsById.values())
       .filter((request) => {
         return request.addresseeId === userId;
+      })
+      .filter((request) => {
+        return request.hiddenByAddresseeAt == null;
       })
       .sort((left, right) => {
         return right.createdAt.getTime() - left.createdAt.getTime();
@@ -115,6 +122,9 @@ export class InMemoryFriendshipRepository extends FriendshipRepository {
     return Array.from(this.requestsById.values())
       .filter((request) => {
         return request.requesterId === userId;
+      })
+      .filter((request) => {
+        return request.hiddenByRequesterAt == null;
       })
       .sort((left, right) => {
         return right.createdAt.getTime() - left.createdAt.getTime();
@@ -146,6 +156,9 @@ export class InMemoryFriendshipRepository extends FriendshipRepository {
     const existing = this.friendshipsByKey.get(key);
 
     if (existing) {
+      existing.hiddenByUserAAt = null;
+      existing.hiddenByUserBAt = null;
+      this.friendshipsByKey.set(key, existing);
       return existing;
     }
 
@@ -153,11 +166,17 @@ export class InMemoryFriendshipRepository extends FriendshipRepository {
       id: randomUUID(),
       userAId: pair.userAId,
       userBId: pair.userBId,
+      hiddenByUserAAt: null,
+      hiddenByUserBAt: null,
       createdAt: new Date(),
     };
 
     this.friendshipsByKey.set(key, friendship);
     return friendship;
+  }
+
+  override async saveFriendship(entity: FriendshipEntity): Promise<void> {
+    this.friendshipsByKey.set(this.buildKey(entity.userAId, entity.userBId), entity);
   }
 
   override async findFriendshipByUserIds(params: {
@@ -172,7 +191,15 @@ export class InMemoryFriendshipRepository extends FriendshipRepository {
     userId: string,
   ): Promise<FriendshipEntity[]> {
     return Array.from(this.friendshipsByKey.values()).filter((friendship) => {
-      return friendship.userAId === userId || friendship.userBId === userId;
+      if (friendship.userAId === userId) {
+        return friendship.hiddenByUserAAt == null;
+      }
+
+      if (friendship.userBId === userId) {
+        return friendship.hiddenByUserBAt == null;
+      }
+
+      return false;
     });
   }
 
@@ -181,7 +208,21 @@ export class InMemoryFriendshipRepository extends FriendshipRepository {
     friendUserId: string;
   }): Promise<boolean> {
     const pair = normalizeFriendshipPair(params.userId, params.friendUserId);
-    return this.friendshipsByKey.delete(this.buildKey(pair.userAId, pair.userBId));
+    const key = this.buildKey(pair.userAId, pair.userBId);
+    const friendship = this.friendshipsByKey.get(key);
+
+    if (!friendship) {
+      return false;
+    }
+
+    if (params.userId === friendship.userAId) {
+      friendship.hiddenByUserAAt = new Date();
+    } else {
+      friendship.hiddenByUserBAt = new Date();
+    }
+
+    this.friendshipsByKey.set(key, friendship);
+    return true;
   }
 
   private buildKey(userAId: string, userBId: string): string {

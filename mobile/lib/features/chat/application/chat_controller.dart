@@ -258,18 +258,17 @@ class ChatController extends ChangeNotifier {
       return;
     }
 
-    _messages = _messages
-        .map((message) {
-          if (message.clientMessageId != clientMessageId) {
-            return message;
-          }
-
-          return message.copyWith(
-            deliveryState: ChatMessageDeliveryState.sending,
-            clearFailureReason: true,
-          );
-        })
-        .toList(growable: false);
+    final retryClientMessageId = _buildClientMessageId();
+    final retryMessage = target.copyWith(
+      clientMessageId: retryClientMessageId,
+      deliveryState: ChatMessageDeliveryState.sending,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      clearServerMessageId: true,
+      clearSequence: true,
+      clearFailureReason: true,
+    );
+    _messages = _mergeMessages([..._messages, retryMessage]);
     _isSending = true;
     notifyListeners();
 
@@ -277,7 +276,7 @@ class ChatController extends ChangeNotifier {
       final confirmedMessage = await _chatRepository.sendText(
         accessToken: _accessToken,
         conversationId: target.conversationId,
-        clientMessageId: target.clientMessageId,
+        clientMessageId: retryClientMessageId,
         text: target.textContent?.text ?? '',
       );
 
@@ -285,9 +284,9 @@ class ChatController extends ChangeNotifier {
       _latestSequence = max(_latestSequence, confirmedMessage.sequence ?? 0);
       await _markConversationAsRead();
     } catch (error) {
-      _messages = _messages
+        _messages = _messages
           .map((message) {
-            if (message.clientMessageId != clientMessageId) {
+            if (message.clientMessageId != retryClientMessageId) {
               return message;
             }
 

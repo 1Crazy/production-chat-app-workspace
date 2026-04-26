@@ -134,12 +134,7 @@ extension _AppShellNotifications on _AppShellState {
       return;
     }
 
-    _updateShellState(() {
-      _selectedConversation = conversation;
-      _currentIndex = 0;
-      _conversationReloadToken += 1;
-      _chatReloadToken += 1;
-    });
+    _activateConversation(conversation);
   }
 
   Future<void> _synchronizeNotificationState(

@@ -26,7 +26,7 @@ class ChatMessageBubble extends StatelessWidget {
     final statusText = switch (message.deliveryState) {
       ChatMessageDeliveryState.sending => '发送中',
       ChatMessageDeliveryState.sent => '已发送',
-      ChatMessageDeliveryState.failed => '发送失败',
+      ChatMessageDeliveryState.failed => message.failureReason ?? '发送失败',
     };
 
     return Padding(

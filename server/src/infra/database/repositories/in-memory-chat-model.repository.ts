@@ -180,6 +180,7 @@ export class InMemoryChatModelRepository extends ChatModelRepository {
     type: MessageType;
     status?: MessageStatus;
     content: Record<string, unknown>;
+    failureReason?: string | null;
   }): Promise<MessageEntity> {
     const conversation = this.getConversationOrThrowSync(params.conversationId);
     const nextSequence = conversation.latestSequence + 1;
@@ -193,6 +194,7 @@ export class InMemoryChatModelRepository extends ChatModelRepository {
       status: params.status ?? 'sent',
       sequence: nextSequence,
       content: params.content,
+      failureReason: params.failureReason ?? null,
       createdAt: now,
       updatedAt: now,
     };

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:production_chat_app/app/dependencies/app_dependencies.dart';
 import 'package:production_chat_app/app/dependencies/app_dependencies_scope.dart';
+import 'package:production_chat_app/app/shell/app_shell.dart';
 import 'package:production_chat_app/features/auth/application/auth_controller.dart';
 import 'package:production_chat_app/features/auth/application/auth_scope.dart';
 import 'package:production_chat_app/features/auth/domain/entities/auth_code_purpose.dart';
@@ -16,21 +17,20 @@ import 'package:production_chat_app/features/chat/domain/entities/chat_history_p
 import 'package:production_chat_app/features/chat/domain/entities/chat_message.dart';
 import 'package:production_chat_app/features/chat/domain/entities/chat_sync_result.dart';
 import 'package:production_chat_app/features/chat/domain/repositories/chat_repository.dart';
-import 'package:production_chat_app/features/contacts/presentation/pages/contacts_page.dart';
 import 'package:production_chat_app/features/conversation/domain/entities/conversation_summary.dart';
 import 'package:production_chat_app/features/conversation/domain/repositories/conversation_repository.dart';
-import 'package:production_chat_app/features/friendship/domain/entities/friend_relationship.dart';
 import 'package:production_chat_app/features/friendship/domain/entities/friend_request_summary.dart';
 import 'package:production_chat_app/features/friendship/domain/entities/friend_summary.dart';
-import 'package:production_chat_app/features/friendship/domain/entities/friend_user_profile.dart';
-import 'package:production_chat_app/features/friendship/domain/entities/friendship_status.dart';
 import 'package:production_chat_app/features/friendship/domain/repositories/friendship_repository.dart';
 import 'package:production_chat_app/features/profile/domain/entities/discoverable_user.dart';
 import 'package:production_chat_app/features/profile/domain/entities/user_profile.dart';
 import 'package:production_chat_app/features/profile/domain/repositories/profile_repository.dart';
-import 'package:production_chat_app/shared/notifications/app_badge_service.dart';
+import 'package:production_chat_app/shared/config/app_environment.dart';
 import 'package:production_chat_app/shared/network/api_client.dart';
+import 'package:production_chat_app/shared/notifications/app_badge_service.dart';
+import 'package:production_chat_app/shared/notifications/device_push_token.dart';
 import 'package:production_chat_app/shared/notifications/notification_remote_data_source.dart';
+import 'package:production_chat_app/shared/notifications/notification_sync_state.dart';
 import 'package:production_chat_app/shared/notifications/push_notification_service.dart';
 import 'package:production_chat_app/shared/notifications/push_registration_service.dart';
 import 'package:production_chat_app/shared/realtime/chat_realtime.dart';
@@ -38,15 +38,13 @@ import 'package:production_chat_app/shared/realtime/chat_realtime_event.dart';
 
 void main() {
   testWidgets(
-    'contacts page can open direct conversation from friend profile',
+    'app shell clears message badge when opening an unread conversation',
     (tester) async {
       final authController = AuthController(
         authRepository: _FakeAuthRepository(),
         pushRegistrationService: _FakePushRegistrationService(),
       );
       await authController.bootstrap();
-
-      String? openedHandle;
 
       await tester.pumpWidget(
         AppDependenciesScope(
@@ -56,23 +54,21 @@ void main() {
             chatRepository: _FakeChatRepository(),
             chatRealtime: _FakeChatRealtime(),
             conversationRepository: _FakeConversationRepository(),
-            firebaseReady: false,
+            firebaseReady: true,
             friendshipRepository: _FakeFriendshipRepository(),
-            notificationRemoteDataSource: NotificationRemoteDataSource(
-              apiClient: ApiClient(baseUrl: 'http://localhost:3000'),
-            ),
+            notificationRemoteDataSource: _FakeNotificationRemoteDataSource(),
             profileRepository: _FakeProfileRepository(),
             pushNotificationService: const NoopPushNotificationService(),
             pushRegistrationService: _FakePushRegistrationService(),
           ),
           child: AuthScope(
             controller: authController,
-            child: MaterialApp(
-              home: Scaffold(
-                body: ContactsPage(
-                  onOpenDirectConversation: (handle) async {
-                    openedHandle = handle;
-                  },
+            child: const MaterialApp(
+              home: AppShell(
+                environment: AppEnvironment(
+                  appName: 'Production Chat',
+                  flavor: 'test',
+                  apiBaseUrl: 'http://localhost:3000',
                 ),
               ),
             ),
@@ -81,12 +77,15 @@ void main() {
       );
 
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Peer User'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('发消息'));
+
+      expect(find.text('77'), findsNWidgets(2));
+
+      await tester.tap(find.text('Unread Peer'));
       await tester.pumpAndSettle();
 
-      expect(openedHandle, 'peer_user');
+      expect(find.text('77'), findsNothing);
+      expect(find.text('联系人'), findsNothing);
+      expect(find.text('发现'), findsNothing);
     },
   );
 }
@@ -136,7 +135,7 @@ class _FakeAuthRepository implements AuthRepository {
     required AuthCodePurpose purpose,
   }) async {
     return AuthCodeReceipt(
-      identifier: 'demo_user',
+      identifier: identifier,
       purpose: purpose,
       debugCode: '246810',
       expiresInSeconds: 600,
@@ -174,7 +173,7 @@ class _FakeAuthRepository implements AuthRepository {
     ),
     currentSession: DeviceSession(
       id: 'session-1',
-      deviceName: 'flutter-mobile',
+      deviceName: 'flutter-web',
       createdAt: DateTime(2026, 1, 1),
       lastSeenAt: DateTime(2026, 1, 1),
       isCurrent: true,
@@ -202,67 +201,128 @@ class _FakePushRegistrationService implements PushRegistrationService {
   }) async {}
 }
 
-class _FakeProfileRepository implements ProfileRepository {
+class _FakeConversationRepository implements ConversationRepository {
+  static final ConversationSummary _conversation = ConversationSummary(
+    id: 'conversation-1',
+    type: 'direct',
+    title: 'Unread Peer',
+    memberCount: 2,
+    lastMessagePreview: '有一条未读消息',
+    latestSequence: 12,
+    unreadCount: 77,
+    updatedAt: DateTime(2026, 1, 1, 12, 0),
+    lastMessageAt: DateTime(2026, 1, 1, 12, 0),
+  );
+
   @override
-  Future<DiscoverableUser> discoverByHandle({
+  Future<String> createGroupConversation({
     required String accessToken,
-    required String handle,
+    required String title,
+    required List<String> memberHandles,
   }) async {
-    return const DiscoverableUser(
-      discoverable: true,
-      profile: DiscoverableProfile(
-        id: 'user-2',
-        nickname: 'Peer User',
-        handle: 'peer_user',
-        avatarUrl: null,
-      ),
-      relationship: FriendRelationship(
-        status: FriendshipStatus.friends,
-        pendingRequestId: null,
-        canMessage: true,
-      ),
+    return _conversation.id;
+  }
+
+  @override
+  Future<String> createOrReuseDirectConversation({
+    required String accessToken,
+    required String targetHandle,
+  }) async {
+    return _conversation.id;
+  }
+
+  @override
+  Future<List<ConversationSummary>> fetchRecent({
+    required String accessToken,
+  }) async {
+    return [_conversation];
+  }
+
+  @override
+  Future<ConversationSummary?> findById({
+    required String accessToken,
+    required String conversationId,
+  }) async {
+    return conversationId == _conversation.id ? _conversation : null;
+  }
+}
+
+class _FakeChatRepository implements ChatRepository {
+  @override
+  Future<ChatHistoryPage> fetchHistory({
+    required String accessToken,
+    required String conversationId,
+    required String currentUserId,
+    int? beforeSequence,
+    int limit = 20,
+  }) async {
+    return ChatHistoryPage(
+      messages: [
+        ChatMessage(
+          clientMessageId: 'message-1',
+          conversationId: conversationId,
+          senderId: 'user-2',
+          senderName: 'Unread Peer',
+          messageKind: ChatMessageKind.text,
+          content: const ChatTextMessageContent(text: '你好'),
+          deliveryState: ChatMessageDeliveryState.sent,
+          sequence: 12,
+          createdAt: DateTime(2026, 1, 1, 12, 0),
+          updatedAt: DateTime(2026, 1, 1, 12, 0),
+        ),
+      ],
+      latestSequence: 12,
+      peerReadSequenceByUserId: const {},
+      memberDisplayNameByUserId: const {
+        'user-1': 'Demo User',
+        'user-2': 'Unread Peer',
+      },
+      memberHandleByUserId: const {
+        'user-1': 'demo_user',
+        'user-2': 'unread_peer',
+      },
+      memberAvatarUrlByUserId: const {'user-1': null, 'user-2': null},
+      peerReadUpdatedAtByUserId: const {},
+      nextBeforeSequence: null,
     );
   }
 
   @override
-  Future<UserProfile> fetchCurrent({required String accessToken}) async {
-    return const UserProfile(
-      id: 'user-1',
-      identifier: 'demo_user',
-      nickname: 'Demo User',
-      handle: 'demo_user',
-      avatarUrl: null,
-      discoveryMode: 'public',
+  Future<ChatMessage> sendText({
+    required String accessToken,
+    required String conversationId,
+    required String clientMessageId,
+    required String text,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatSyncResult> syncAfter({
+    required String accessToken,
+    required String conversationId,
+    required int afterSequence,
+    int limit = 100,
+  }) async {
+    return const ChatSyncResult(
+      messages: [],
+      latestSequence: 12,
+      nextAfterSequence: 12,
+      hasMore: false,
     );
   }
 
   @override
-  Future<UserProfile> updateCurrent({
+  Future<void> updateReadCursor({
     required String accessToken,
-    required String nickname,
-    required String? avatarUrl,
-    required String discoveryMode,
-  }) async {
-    return UserProfile(
-      id: 'user-1',
-      identifier: 'demo_user',
-      nickname: nickname,
-      handle: 'demo_user',
-      avatarUrl: avatarUrl,
-      discoveryMode: discoveryMode,
-    );
-  }
+    required String conversationId,
+    required int lastReadSequence,
+  }) async {}
 }
 
 class _FakeFriendshipRepository implements FriendshipRepository {
   @override
   Future<void> acceptFriendRequest({
-    required String accessToken,
-    required String requestId,
-  }) async {}
-
-  @override
-  Future<void> ignoreFriendRequest({
     required String accessToken,
     required String requestId,
   }) async {}
@@ -275,25 +335,21 @@ class _FakeFriendshipRepository implements FriendshipRepository {
   }) async {}
 
   @override
-  Future<List<FriendSummary>> fetchFriends({
+  Future<List<FriendRequestSummary>> fetchIncomingRequests({
     required String accessToken,
   }) async {
-    return [
-      FriendSummary(
-        friendUserId: 'user-2',
-        createdAt: DateTime(2026, 1, 1),
-        profile: const FriendUserProfile(
-          id: 'user-2',
-          nickname: 'Peer User',
-          handle: 'peer_user',
-          avatarUrl: null,
-        ),
-      ),
-    ];
+    return const [];
   }
 
   @override
-  Future<List<FriendRequestSummary>> fetchIncomingRequests({
+  Future<List<FriendRequestSummary>> fetchOutgoingRequests({
+    required String accessToken,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<List<FriendSummary>> fetchFriends({
     required String accessToken,
   }) async {
     return const [];
@@ -307,11 +363,15 @@ class _FakeFriendshipRepository implements FriendshipRepository {
   }
 
   @override
-  Future<List<FriendRequestSummary>> fetchOutgoingRequests({
+  Future<void> ignoreFriendRequest({
     required String accessToken,
-  }) async {
-    return const [];
-  }
+    required String requestId,
+  }) async {}
+
+  @override
+  Future<void> markIncomingRequestsViewed({
+    required String accessToken,
+  }) async {}
 
   @override
   Future<void> rejectFriendRequest({
@@ -327,114 +387,60 @@ class _FakeFriendshipRepository implements FriendshipRepository {
   }) async {}
 
   @override
-  Future<void> markIncomingRequestsViewed({
-    required String accessToken,
-  }) async {}
-
-  @override
   Future<void> removeFriend({
     required String accessToken,
     required String friendUserId,
   }) async {}
 }
 
-class _FakeConversationRepository implements ConversationRepository {
+class _FakeProfileRepository implements ProfileRepository {
   @override
-  Future<String> createOrReuseDirectConversation({
+  Future<DiscoverableUser> discoverByHandle({
     required String accessToken,
-    required String targetHandle,
+    required String handle,
   }) async {
-    return 'conversation-id';
+    throw UnimplementedError();
   }
 
   @override
-  Future<String> createGroupConversation({
-    required String accessToken,
-    required String title,
-    required List<String> memberHandles,
-  }) async {
-    return 'group-conversation-id';
+  Future<UserProfile> fetchCurrent({required String accessToken}) async {
+    throw UnimplementedError();
   }
 
   @override
-  Future<List<ConversationSummary>> fetchRecent({
+  Future<UserProfile> updateCurrent({
     required String accessToken,
+    required String nickname,
+    required String? avatarUrl,
+    required String discoveryMode,
   }) async {
-    return const [];
-  }
-
-  @override
-  Future<ConversationSummary?> findById({
-    required String accessToken,
-    required String conversationId,
-  }) async {
-    return null;
+    throw UnimplementedError();
   }
 }
 
-class _FakeChatRepository implements ChatRepository {
-  @override
-  Future<ChatHistoryPage> fetchHistory({
-    required String accessToken,
-    required String conversationId,
-    required String currentUserId,
-    int? beforeSequence,
-    int limit = 20,
-  }) async {
-    return const ChatHistoryPage(
-      messages: [],
-      latestSequence: 0,
-      peerReadSequenceByUserId: {},
-      memberDisplayNameByUserId: {},
-      memberHandleByUserId: {},
-      memberAvatarUrlByUserId: {},
-      peerReadUpdatedAtByUserId: {},
-      nextBeforeSequence: null,
-    );
-  }
+class _FakeNotificationRemoteDataSource extends NotificationRemoteDataSource {
+  _FakeNotificationRemoteDataSource()
+    : super(apiClient: ApiClient(baseUrl: 'http://localhost:3000'));
 
   @override
-  Future<ChatMessage> sendText({
+  Future<void> registerPushToken({
     required String accessToken,
-    required String conversationId,
-    required String clientMessageId,
-    required String text,
-  }) async {
-    return ChatMessage(
-      clientMessageId: clientMessageId,
-      conversationId: conversationId,
-      senderId: 'user-1',
-      senderName: 'Demo User',
-      messageKind: ChatMessageKind.text,
-      content: ChatTextMessageContent(text: text),
-      deliveryState: ChatMessageDeliveryState.sent,
-      createdAt: DateTime(2026, 1, 1),
-      updatedAt: DateTime(2026, 1, 1),
-      sequence: 1,
-    );
-  }
-
-  @override
-  Future<ChatSyncResult> syncAfter({
-    required String accessToken,
-    required String conversationId,
-    required int afterSequence,
-    int limit = 100,
-  }) async {
-    return const ChatSyncResult(
-      messages: [],
-      latestSequence: 0,
-      nextAfterSequence: 0,
-      hasMore: false,
-    );
-  }
-
-  @override
-  Future<void> updateReadCursor({
-    required String accessToken,
-    required String conversationId,
-    required int lastReadSequence,
+    required DevicePushToken token,
+    required bool privacyModeEnabled,
   }) async {}
+
+  @override
+  Future<NotificationSyncState> syncState({
+    required String accessToken,
+    required List<Map<String, Object?>> conversationStates,
+    String? pushMessageId,
+  }) async {
+    return const NotificationSyncState(
+      unreadBadgeCount: 0,
+      conversationStates: [],
+      recoveredPushMessageId: null,
+    );
+  }
 }
 
 class _FakeChatRealtime implements ChatRealtime {

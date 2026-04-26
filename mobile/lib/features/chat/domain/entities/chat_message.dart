@@ -115,6 +115,8 @@ class ChatMessage {
     String? serverMessageId,
     int? sequence,
     String? failureReason,
+    bool clearServerMessageId = false,
+    bool clearSequence = false,
     bool clearFailureReason = false,
   }) {
     return ChatMessage(
@@ -127,8 +129,10 @@ class ChatMessage {
       deliveryState: deliveryState ?? this.deliveryState,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      serverMessageId: serverMessageId ?? this.serverMessageId,
-      sequence: sequence ?? this.sequence,
+      serverMessageId: clearServerMessageId
+          ? null
+          : serverMessageId ?? this.serverMessageId,
+      sequence: clearSequence ? null : sequence ?? this.sequence,
       failureReason: clearFailureReason
           ? null
           : failureReason ?? this.failureReason,

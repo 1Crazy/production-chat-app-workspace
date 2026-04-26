@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 
 import type { GetConversationHistoryQueryDto } from '../dto/get-conversation-history-query.dto';
 import type {
@@ -17,6 +18,7 @@ import { RateLimitService } from '@app/infra/abuse/services/rate-limit.service';
 import { ChatModelRepository } from '@app/infra/database/repositories/chat-model.repository';
 import { MetricsRegistryService } from '@app/infra/observability/metrics-registry.service';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
+import { FriendshipsService } from '@app/modules/friendships/services/friendships.service';
 import { NotificationsService } from '@app/modules/notifications/services/notifications.service';
 import { ChatGateway } from '@app/modules/realtime/gateways/chat.gateway';
 
@@ -28,6 +30,7 @@ export class MessagesService {
     private readonly chatModelRepository: ChatModelRepository,
     private readonly messageIdempotencyStore: MessageIdempotencyStore,
     private readonly authIdentityService: AuthIdentityService,
+    private readonly friendshipsService: FriendshipsService,
     private readonly rateLimitService: RateLimitService,
     private readonly metricsRegistryService: MetricsRegistryService,
     private readonly notificationsService: NotificationsService,
@@ -72,10 +75,26 @@ export class MessagesService {
       },
     });
     await this.authIdentityService.getActiveUserById(senderUserId);
-    await this.messageReaderService.getAccessibleConversationOrThrow(
+    const conversation = await this.messageReaderService.getAccessibleConversationOrThrow(
       dto.conversationId,
       senderUserId,
     );
+    try {
+      await this.assertDirectConversationMessagingAllowed(conversation, senderUserId);
+    } catch (error) {
+      if (
+        error instanceof ForbiddenException &&
+        error.message == '需先加好友'
+      ) {
+        return this.persistFailedMessage({
+          senderUserId,
+          dto,
+          failureReason: error.message,
+        });
+      }
+
+      throw error;
+    }
 
     const clientMessageId = dto.clientMessageId.trim();
     const idempotencyKey = {
@@ -207,5 +226,76 @@ export class MessagesService {
         message_type: messageType,
       },
     });
+  }
+
+  private async persistFailedMessage(params: {
+    senderUserId: string;
+    dto: SendMessageDto;
+    failureReason: string;
+  }): Promise<SendMessageResponseDto> {
+    const existingMessage = await this.resolveExistingMessage({
+      conversationId: params.dto.conversationId,
+      senderId: params.senderUserId,
+      clientMessageId: params.dto.clientMessageId.trim(),
+    });
+
+    if (existingMessage) {
+      return {
+        ack: 'accepted',
+        message: await this.messageReaderService.buildMessageView(
+          existingMessage.id,
+        ),
+      };
+    }
+
+    const failedMessage = await this.chatModelRepository.createMessage({
+      conversationId: params.dto.conversationId,
+      senderId: params.senderUserId,
+      clientMessageId: params.dto.clientMessageId.trim(),
+      type: params.dto.type,
+      status: 'failed',
+      content: await this.messageContentService.buildMessageContent(
+        params.senderUserId,
+        params.dto,
+      ),
+      failureReason: params.failureReason,
+    });
+    await this.chatModelRepository.updateReadCursor({
+      conversationId: params.dto.conversationId,
+      userId: params.senderUserId,
+      lastReadSequence: failedMessage.sequence,
+    });
+
+    this.recordDeliveryMetric('failed', params.dto.type);
+
+    return {
+      ack: 'accepted',
+      message: await this.messageReaderService.buildMessageView(
+        failedMessage.id,
+      ),
+    };
+  }
+
+  private async assertDirectConversationMessagingAllowed(
+    conversation: { id: string; type: string },
+    senderUserId: string,
+  ): Promise<void> {
+    if (conversation.type !== 'direct') {
+      return;
+    }
+
+    const memberIds = await this.chatModelRepository.listConversationMemberUserIds(
+      conversation.id,
+    );
+    const peerUserId = memberIds.find((userId) => userId !== senderUserId);
+
+    if (!peerUserId) {
+      return;
+    }
+
+    await this.friendshipsService.assertDirectConversationMessagingAllowed(
+      senderUserId,
+      peerUserId,
+    );
   }
 }

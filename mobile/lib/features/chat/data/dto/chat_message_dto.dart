@@ -8,10 +8,12 @@ class ChatMessageDto {
     required this.senderName,
     required this.clientMessageId,
     required this.messageKind,
+    required this.deliveryState,
     required this.sequence,
     required this.content,
     required this.createdAt,
     required this.updatedAt,
+    required this.failureReason,
   });
 
   factory ChatMessageDto.fromJson(Map<String, dynamic> json) {
@@ -26,10 +28,14 @@ class ChatMessageDto {
       senderName: sender['nickname'] as String,
       clientMessageId: json['clientMessageId'] as String,
       messageKind: messageKind,
+      deliveryState: _deliveryStateFromWire(
+        json['status']?.toString() ?? 'sent',
+      ),
       sequence: json['sequence'] as int,
       content: _contentFromJson(messageKind: messageKind, json: content),
       createdAt: _parseToLocal(json['createdAt'] as String),
       updatedAt: _parseToLocal(json['updatedAt'] as String),
+      failureReason: json['failureReason']?.toString(),
     );
   }
 
@@ -39,10 +45,12 @@ class ChatMessageDto {
   final String senderName;
   final String clientMessageId;
   final ChatMessageKind messageKind;
+  final ChatMessageDeliveryState deliveryState;
   final int sequence;
   final ChatMessageContent content;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? failureReason;
 
   ChatMessage toEntity() {
     return ChatMessage(
@@ -52,12 +60,25 @@ class ChatMessageDto {
       senderName: senderName,
       messageKind: messageKind,
       content: content,
-      deliveryState: ChatMessageDeliveryState.sent,
+      deliveryState: deliveryState,
       createdAt: createdAt,
       updatedAt: updatedAt,
       serverMessageId: serverMessageId,
       sequence: sequence,
+      failureReason: failureReason,
     );
+  }
+
+  static ChatMessageDeliveryState _deliveryStateFromWire(String status) {
+    switch (status) {
+      case 'failed':
+        return ChatMessageDeliveryState.failed;
+      case 'processing':
+        return ChatMessageDeliveryState.sending;
+      case 'sent':
+      default:
+        return ChatMessageDeliveryState.sent;
+    }
   }
 
   static ChatMessageKind _messageKindFromWire(String type) {

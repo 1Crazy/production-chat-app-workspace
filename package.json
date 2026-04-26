@@ -10,6 +10,8 @@
     "dev:db": "pnpm db:up",
     "dev:prepare": "pnpm db:up && pnpm server:migrate:dev",
     "dev:server": "pnpm --dir server start:dev",
+    "dev:android": "cd mobile && flutter run -d android --dart-define-from-file=config/env/development.json.example",
+    "dev:ios": "cd mobile && flutter run -d ios --dart-define-from-file=config/env/development.json.example",
     "dev:web": "cd mobile && flutter run -d chrome --dart-define-from-file=config/env/development.json.example",
     "dev:web:test": "cd mobile && flutter run -d chrome --dart-define-from-file=config/env/test.json.example",
     "dev:web:staging": "cd mobile && flutter run -d chrome --dart-define-from-file=config/env/staging.json.example",

@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 
 import { CreateFriendRequestDto } from '../dto/create-friend-request.dto';
+import { RejectFriendRequestDto } from '../dto/reject-friend-request.dto';
 import { FriendshipsService } from '../services/friendships.service';
 
 import { AccessTokenGuard } from '@app/modules/auth/guards/access-token.guard';
@@ -94,8 +95,22 @@ export class FriendshipsController {
   rejectFriendRequest(
     @Req() request: AuthenticatedRequest,
     @Param('requestId') requestId: string,
+    @Body() dto: RejectFriendRequestDto,
   ) {
-    return this.friendshipsService.rejectFriendRequest(
+    return this.friendshipsService.rejectFriendRequestWithReason(
+      request.auth.user.id,
+      requestId,
+      dto,
+    );
+  }
+
+  @UseGuards(AccessTokenGuard)
+  @Delete('requests/:requestId')
+  deleteFriendRequestRecord(
+    @Req() request: AuthenticatedRequest,
+    @Param('requestId') requestId: string,
+  ) {
+    return this.friendshipsService.deleteFriendRequestRecord(
       request.auth.user.id,
       requestId,
     );

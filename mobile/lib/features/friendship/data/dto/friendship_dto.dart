@@ -104,6 +104,7 @@ class FriendRequestSummaryDto {
     required this.direction,
     required this.status,
     required this.message,
+    required this.rejectReason,
     required this.createdAt,
     required this.respondedAt,
     required this.counterparty,
@@ -117,6 +118,7 @@ class FriendRequestSummaryDto {
           : FriendRequestDirection.outgoing,
       status: json['status']?.toString() ?? 'pending',
       message: json['message']?.toString(),
+      rejectReason: json['rejectReason']?.toString(),
       createdAt: DateTime.parse(
         json['createdAt']?.toString() ?? DateTime(1970).toIso8601String(),
       ).toLocal(),
@@ -133,6 +135,7 @@ class FriendRequestSummaryDto {
   final FriendRequestDirection direction;
   final String status;
   final String? message;
+  final String? rejectReason;
   final DateTime createdAt;
   final DateTime? respondedAt;
   final FriendUserProfileDto counterparty;
@@ -143,6 +146,7 @@ class FriendRequestSummaryDto {
       direction: direction,
       status: status,
       message: message,
+      rejectReason: rejectReason,
       createdAt: createdAt,
       respondedAt: respondedAt,
       counterparty: counterparty.toEntity(),

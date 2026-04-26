@@ -60,8 +60,13 @@ void main() {
 
     await tester.tap(find.text('添加'));
     await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '我是备注');
+    await tester.ensureVisible(find.text('发送申请'));
+    await tester.tap(find.text('发送申请'));
+    await tester.pumpAndSettle();
 
     expect(friendshipRepository.createdTargetHandles, ['peer_user']);
+    expect(friendshipRepository.createdMessages, ['我是备注']);
   });
 
   testWidgets('friend requests page shows outgoing rejected state', (
@@ -99,6 +104,7 @@ void main() {
               direction: FriendRequestDirection.outgoing,
               status: 'pending',
               message: 'hi',
+              rejectReason: null,
               createdAt: DateTime(2026, 1, 1, 10, 0),
               respondedAt: null,
               counterparty: const FriendUserProfile(
@@ -353,6 +359,7 @@ class _FakeFriendshipRepository implements FriendshipRepository {
           direction: FriendRequestDirection.outgoing,
           status: 'rejected',
           message: 'hi',
+          rejectReason: '暂时不方便',
           createdAt: DateTime(2026, 1, 1, 10, 0),
           respondedAt: DateTime(2026, 1, 1, 10, 30),
           counterparty: const FriendUserProfile(
@@ -374,6 +381,7 @@ class _FakeFriendshipRepository implements FriendshipRepository {
           direction: FriendRequestDirection.incoming,
           status: 'pending',
           message: '你好',
+          rejectReason: null,
           createdAt: DateTime(2026, 1, 1, 9, 0),
           respondedAt: null,
           counterparty: const FriendUserProfile(
@@ -388,6 +396,7 @@ class _FakeFriendshipRepository implements FriendshipRepository {
   }
 
   final List<String> createdTargetHandles = [];
+  final List<String?> createdMessages = [];
   final List<FriendRequestSummary> _incomingRequests;
   final List<FriendRequestSummary> _outgoingRequests;
 
@@ -410,6 +419,7 @@ class _FakeFriendshipRepository implements FriendshipRepository {
     String? message,
   }) async {
     createdTargetHandles.add(targetHandle);
+    createdMessages.add(message);
   }
 
   @override
@@ -442,6 +452,13 @@ class _FakeFriendshipRepository implements FriendshipRepository {
 
   @override
   Future<void> rejectFriendRequest({
+    required String accessToken,
+    required String requestId,
+    String? rejectReason,
+  }) async {}
+
+  @override
+  Future<void> deleteFriendRequestRecord({
     required String accessToken,
     required String requestId,
   }) async {}

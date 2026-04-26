@@ -35,18 +35,21 @@ export class MessageReaderService {
     conversationId: string,
     query: GetConversationHistoryQueryDto,
   ): Promise<MessageHistoryPageDto> {
-    const conversation = await this.getAccessibleConversationOrThrow(
+    await this.getAccessibleConversationOrThrow(conversationId, requesterUserId);
+    const limit = query.limit ?? this.defaultHistoryPageSize;
+    const visibleMessages = await this.listVisibleMessages(
       conversationId,
       requesterUserId,
     );
-    const limit = query.limit ?? this.defaultHistoryPageSize;
+    const latestVisibleSequence =
+      visibleMessages.length > 0
+        ? visibleMessages[visibleMessages.length - 1]!.sequence
+        : 0;
     const upperBoundSequence =
       query.beforeSequence == null
-        ? conversation.latestSequence
+        ? latestVisibleSequence
         : Math.max(query.beforeSequence - 1, 0);
-    const eligibleMessages = (
-      await this.chatModelRepository.listMessages(conversationId)
-    ).filter((message) => {
+    const eligibleMessages = visibleMessages.filter((message) => {
       return message.sequence <= upperBoundSequence;
     });
     const pageItems = eligibleMessages.slice(
@@ -61,7 +64,7 @@ export class MessageReaderService {
 
     return {
       conversationId,
-      latestSequence: conversation.latestSequence,
+      latestSequence: latestVisibleSequence,
       items: await Promise.all(
         pageItems.map((message) => this.buildMessageView(message.id)),
       ),
@@ -76,17 +79,19 @@ export class MessageReaderService {
     conversationId: string,
     query: SyncMessagesQueryDto,
   ): Promise<MessageSyncDto> {
-    const conversation = await this.getAccessibleConversationOrThrow(
+    await this.getAccessibleConversationOrThrow(conversationId, requesterUserId);
+    const limit = query.limit ?? this.defaultSyncPageSize;
+    const visibleMessages = await this.listVisibleMessages(
       conversationId,
       requesterUserId,
     );
-    const limit = query.limit ?? this.defaultSyncPageSize;
-    const missingMessages = (
-      await this.chatModelRepository.listMessagesAfterSequence(
-        conversationId,
-        query.afterSequence,
-      )
-    ).slice(0, limit);
+    const latestVisibleSequence =
+      visibleMessages.length > 0
+        ? visibleMessages[visibleMessages.length - 1]!.sequence
+        : 0;
+    const missingMessages = visibleMessages
+      .filter((message) => message.sequence > query.afterSequence)
+      .slice(0, limit);
     const nextAfterSequence =
       missingMessages.length > 0
         ? missingMessages[missingMessages.length - 1]!.sequence
@@ -94,9 +99,9 @@ export class MessageReaderService {
 
     return {
       conversationId,
-      latestSequence: conversation.latestSequence,
+      latestSequence: latestVisibleSequence,
       nextAfterSequence,
-      hasMore: nextAfterSequence < conversation.latestSequence,
+      hasMore: nextAfterSequence < latestVisibleSequence,
       items: await Promise.all(
         missingMessages.map((message) => this.buildMessageView(message.id)),
       ),
@@ -137,17 +142,20 @@ export class MessageReaderService {
   private async buildReadCursorViews(
     conversationId: string,
   ): Promise<ReadCursorView[]> {
-    const [conversation, cursors] = await Promise.all([
-      this.chatModelRepository.getConversationOrThrow(conversationId),
+    const [cursors] = await Promise.all([
       this.chatModelRepository.listReadCursorsForConversation(conversationId),
     ]);
 
-    return cursors.map((cursor) => {
+    return Promise.all(cursors.map(async (cursor) => {
       return toReadCursorView(
         cursor,
-        Math.max(conversation.latestSequence - cursor.lastReadSequence, 0),
+        await this.countVisibleUnreadMessages(
+          conversationId,
+          cursor.userId,
+          cursor.lastReadSequence,
+        ),
       );
-    });
+    }));
   }
 
   private async buildMemberProfiles(
@@ -164,5 +172,35 @@ export class MessageReaderService {
         );
       }),
     );
+  }
+
+  private canRequesterViewMessage(
+    message: { status: string; senderId: string },
+    requesterUserId: string,
+  ): boolean {
+    if (message.status != 'failed') {
+      return true;
+    }
+
+    return message.senderId == requesterUserId;
+  }
+
+  private async listVisibleMessages(
+    conversationId: string,
+    requesterUserId: string,
+  ) {
+    return (await this.chatModelRepository.listMessages(conversationId)).filter(
+      (message) => this.canRequesterViewMessage(message, requesterUserId),
+    );
+  }
+
+  private async countVisibleUnreadMessages(
+    conversationId: string,
+    requesterUserId: string,
+    lastReadSequence: number,
+  ): Promise<number> {
+    return (
+      await this.listVisibleMessages(conversationId, requesterUserId)
+    ).filter((message) => message.sequence > lastReadSequence).length;
   }
 }

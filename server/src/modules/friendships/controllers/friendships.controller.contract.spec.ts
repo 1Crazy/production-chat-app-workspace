@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { FriendshipsController } from './friendships.controller';
 
 import { CreateFriendRequestDto } from '@app/modules/friendships/dto/create-friend-request.dto';
+import { RejectFriendRequestDto } from '@app/modules/friendships/dto/reject-friend-request.dto';
 import type { FriendshipsService } from '@app/modules/friendships/services/friendships.service';
 
 describe('FriendshipsController contract', () => {
@@ -15,7 +16,8 @@ describe('FriendshipsController contract', () => {
   let friendshipsService: {
     createFriendRequest: jest.Mock;
     acceptFriendRequest: jest.Mock;
-    rejectFriendRequest: jest.Mock;
+    rejectFriendRequestWithReason: jest.Mock;
+    deleteFriendRequestRecord: jest.Mock;
     listIncomingRequests: jest.Mock;
     listOutgoingRequests: jest.Mock;
     listFriends: jest.Mock;
@@ -25,11 +27,12 @@ describe('FriendshipsController contract', () => {
 
   beforeEach(() => {
     friendshipsService = {
-      createFriendRequest: jest.fn().mockResolvedValue({
+    createFriendRequest: jest.fn().mockResolvedValue({
         id: 'request-1',
         direction: 'outgoing',
         status: 'pending',
         message: 'hi',
+        rejectReason: null,
         createdAt: '2026-01-01T00:00:00.000Z',
         respondedAt: null,
         counterparty: {
@@ -39,11 +42,15 @@ describe('FriendshipsController contract', () => {
           avatarUrl: null,
         },
       }),
+      deleteFriendRequestRecord: jest.fn().mockResolvedValue({
+        success: true,
+        requestId: 'request-1',
+      }),
       acceptFriendRequest: jest.fn().mockResolvedValue({
         success: true,
         requestId: 'request-1',
       }),
-      rejectFriendRequest: jest.fn().mockResolvedValue({
+      rejectFriendRequestWithReason: jest.fn().mockResolvedValue({
         success: true,
         requestId: 'request-1',
       }),
@@ -103,9 +110,39 @@ describe('FriendshipsController contract', () => {
       id: 'request-1',
       direction: 'outgoing',
       status: 'pending',
+      rejectReason: null,
       counterparty: {
         handle: 'bob_user',
       },
+    });
+  });
+
+  it('should accept optional reject reasons in the documented reject contract', async () => {
+    const dto = (await validationPipe.transform(
+      {
+        rejectReason: '暂时不方便',
+      },
+      {
+        type: 'body',
+        metatype: RejectFriendRequestDto,
+      },
+    )) as RejectFriendRequestDto;
+
+    const response = await controller.rejectFriendRequest(
+      {
+        auth: {
+          user: {
+            id: 'user-1',
+          },
+        },
+      } as never,
+      'request-1',
+      dto,
+    );
+
+    expect(response).toEqual({
+      success: true,
+      requestId: 'request-1',
     });
   });
 });

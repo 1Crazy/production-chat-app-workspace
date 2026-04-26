@@ -16,6 +16,7 @@ export class PrismaMessageModelRepository {
     type: MessageType;
     status?: MessageStatus;
     content: Record<string, unknown>;
+    failureReason?: string | null;
   }): Promise<MessageEntity> {
     const now = new Date();
     try {
@@ -41,6 +42,7 @@ export class PrismaMessageModelRepository {
             status: params.status ?? 'sent',
             sequence: conversation.latestSequence,
             content: params.content as Prisma.InputJsonObject,
+            failureReason: params.failureReason ?? null,
             createdAt: now,
             updatedAt: now,
           },
@@ -223,6 +225,7 @@ export class PrismaMessageModelRepository {
       status: message.status as MessageEntity['status'],
       sequence: message.sequence,
       content: this.toMessageContent(message.content),
+      failureReason: message.failureReason,
       createdAt: message.createdAt,
       updatedAt: message.updatedAt,
     };

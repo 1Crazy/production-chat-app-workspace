@@ -9,6 +9,8 @@ import { InMemoryChatModelRepository } from '@app/infra/database/repositories/in
 import type { MetricsRegistryService } from '@app/infra/observability/metrics-registry.service';
 import { InMemoryAuthRepository } from '@app/modules/auth/repositories/in-memory-auth.repository';
 import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.service';
+import { InMemoryFriendshipRepository } from '@app/modules/friendships/repositories/in-memory-friendship.repository';
+import { FriendshipsService } from '@app/modules/friendships/services/friendships.service';
 import type { MediaAttachmentEntity } from '@app/modules/media/entities/media-attachment.entity';
 import { MediaAttachmentRepository } from '@app/modules/media/repositories/media-attachment.repository';
 import type { NotificationsService } from '@app/modules/notifications/services/notifications.service';
@@ -126,6 +128,7 @@ class InMemoryMediaAttachmentRepository extends MediaAttachmentRepository {
 describe('MessagesService', () => {
   function createFixture() {
     const authRepository = new InMemoryAuthRepository();
+    const friendshipRepository = new InMemoryFriendshipRepository();
     const chatModelRepository = new InMemoryChatModelRepository();
     const authIdentityService = new AuthIdentityService(authRepository);
     const messageIdempotencyStore = new InMemoryMessageIdempotencyStore();
@@ -136,6 +139,11 @@ describe('MessagesService', () => {
     const metricsRegistryService = {
       incrementCounter: jest.fn(),
     } as unknown as MetricsRegistryService;
+    const friendshipsService = new FriendshipsService(
+      friendshipRepository,
+      authIdentityService,
+      rateLimitService,
+    );
     const notificationsService = {
       dispatchOfflineMessagePush: jest.fn().mockResolvedValue(undefined),
     } as unknown as NotificationsService;
@@ -153,6 +161,7 @@ describe('MessagesService', () => {
       chatModelRepository,
       messageIdempotencyStore,
       authIdentityService,
+      friendshipsService,
       rateLimitService,
       metricsRegistryService,
       notificationsService,
@@ -163,6 +172,7 @@ describe('MessagesService', () => {
 
     return {
       authRepository,
+      friendshipRepository,
       chatModelRepository,
       chatGateway,
       mediaAttachmentRepository,
@@ -188,6 +198,10 @@ describe('MessagesService', () => {
       type: 'direct',
       createdBy: alice.id,
       memberIds: [alice.id, bob.id],
+    });
+    await fixture.friendshipRepository.createFriendship({
+      userId: alice.id,
+      friendUserId: bob.id,
     });
 
     await fixture.chatModelRepository.createMessage({
@@ -244,6 +258,10 @@ describe('MessagesService', () => {
       createdBy: alice.id,
       memberIds: [alice.id, bob.id],
     });
+    await fixture.friendshipRepository.createFriendship({
+      userId: alice.id,
+      friendUserId: bob.id,
+    });
 
     for (let index = 1; index <= 4; index += 1) {
       await fixture.chatModelRepository.createMessage({
@@ -287,6 +305,10 @@ describe('MessagesService', () => {
       createdBy: alice.id,
       memberIds: [alice.id, bob.id],
     });
+    await fixture.friendshipRepository.createFriendship({
+      userId: alice.id,
+      friendUserId: bob.id,
+    });
 
     const firstAck = await fixture.service.sendMessage(alice.id, {
       conversationId: conversation.id,
@@ -328,6 +350,10 @@ describe('MessagesService', () => {
       type: 'direct',
       createdBy: alice.id,
       memberIds: [alice.id, bob.id],
+    });
+    await fixture.friendshipRepository.createFriendship({
+      userId: alice.id,
+      friendUserId: bob.id,
     });
     const attachment = await fixture.mediaAttachmentRepository.createPendingAttachment({
       id: 'attachment-1',
@@ -394,5 +420,64 @@ describe('MessagesService', () => {
         text: 'hello',
       }),
     ).rejects.toThrow('消息发送过于频繁，请稍后再试');
+  });
+
+  it('should reject direct messages after one side removes the friendship', async () => {
+    const fixture = createFixture();
+    const alice = await fixture.authRepository.createUser({
+      identifier: 'alice@example.com',
+      nickname: 'Alice',
+      handle: 'alice_user',
+    });
+    const bob = await fixture.authRepository.createUser({
+      identifier: 'bob@example.com',
+      nickname: 'Bob',
+      handle: 'bob_user',
+    });
+    const conversation = await fixture.chatModelRepository.createConversation({
+      type: 'direct',
+      createdBy: alice.id,
+      memberIds: [alice.id, bob.id],
+    });
+    await fixture.friendshipRepository.createFriendship({
+      userId: alice.id,
+      friendUserId: bob.id,
+    });
+    await fixture.friendshipRepository.deleteFriendshipByUserIds({
+      userId: alice.id,
+      friendUserId: bob.id,
+    });
+
+    await expect(
+      fixture.service.sendMessage(bob.id, {
+        conversationId: conversation.id,
+        clientMessageId: 'client-msg-blocked-1',
+        type: 'text',
+        text: 'still there?',
+      }),
+    ).resolves.toMatchObject({
+      message: {
+        status: 'failed',
+        failureReason: '需先加好友',
+      },
+    });
+
+    const bobHistory = await fixture.service.getConversationHistory(
+      bob.id,
+      conversation.id,
+      {},
+    );
+    const aliceHistory = await fixture.service.getConversationHistory(
+      alice.id,
+      conversation.id,
+      {},
+    );
+
+    expect(
+      bobHistory.items.some((item) => item.clientMessageId == 'client-msg-blocked-1'),
+    ).toBe(true);
+    expect(
+      aliceHistory.items.some((item) => item.clientMessageId == 'client-msg-blocked-1'),
+    ).toBe(false);
   });
 });

@@ -14,6 +14,7 @@ import { AuthIdentityService } from '@app/modules/auth/services/auth-identity.se
 import { AuthTokenService } from '@app/modules/auth/services/auth-token.service';
 import type { AuthenticatedRequest } from '@app/modules/auth/types/authenticated-request.type';
 import { CreateFriendRequestDto } from '@app/modules/friendships/dto/create-friend-request.dto';
+import { RejectFriendRequestDto } from '@app/modules/friendships/dto/reject-friend-request.dto';
 import { FriendshipRepository } from '@app/modules/friendships/repositories/friendship.repository';
 import { InMemoryFriendshipRepository } from '@app/modules/friendships/repositories/in-memory-friendship.repository';
 import { FriendshipsService } from '@app/modules/friendships/services/friendships.service';
@@ -131,18 +132,53 @@ describe('FriendshipsController integration', () => {
 
     const request = await controller.createFriendRequest(aliceRequest, createDto);
     expect(request.direction).toBe('outgoing');
+    expect(request.rejectReason).toBeNull();
 
     const incoming = await controller.listIncomingRequests(bobRequest);
     expect(incoming).toHaveLength(1);
     expect(incoming[0]?.counterparty.handle).toBe('alice_user');
 
-    const acceptResponse = await controller.acceptFriendRequest(
+    const rejectDto = (await validationPipe.transform(
+      {
+        rejectReason: '暂时不方便',
+      },
+      {
+        type: 'body',
+        metatype: RejectFriendRequestDto,
+      },
+    )) as RejectFriendRequestDto;
+    const rejectResponse = await controller.rejectFriendRequest(
       bobRequest,
       request.id,
+      rejectDto,
+    );
+    expect(rejectResponse).toEqual({
+      success: true,
+      requestId: request.id,
+    });
+
+    const outgoing = await controller.listOutgoingRequests(aliceRequest);
+    expect(outgoing[0]?.rejectReason).toBe('暂时不方便');
+
+    const hiddenResponse = await controller.deleteFriendRequestRecord(
+      aliceRequest,
+      request.id,
+    );
+    expect(hiddenResponse).toEqual({
+      success: true,
+      requestId: request.id,
+    });
+
+    expect(await controller.listOutgoingRequests(aliceRequest)).toHaveLength(0);
+
+    const request2 = await controller.createFriendRequest(aliceRequest, createDto);
+    const acceptResponse = await controller.acceptFriendRequest(
+      bobRequest,
+      request2.id,
     );
     expect(acceptResponse).toEqual({
       success: true,
-      requestId: request.id,
+      requestId: request2.id,
     });
 
     const aliceFriends = await controller.listFriends(aliceRequest);

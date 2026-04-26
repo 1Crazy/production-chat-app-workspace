@@ -71,6 +71,8 @@ pnpm dev:web
 - `pnpm dev:prepare`：启动本地 PostgreSQL / Redis / MinIO，并执行后端开发环境迁移
 - `pnpm dev:server`：启动 NestJS 开发服务
 - `pnpm dev:web`：启动 Flutter Web（Chrome）
+- `pnpm dev:android`：启动 Flutter Android 开发环境
+- `pnpm dev:ios`：启动 Flutter iOS 开发环境
 
 ### Flutter / Web
 
@@ -84,6 +86,13 @@ pnpm dev:web
 pnpm dev:web:test
 pnpm dev:web:staging
 pnpm dev:web:prod
+```
+
+### Flutter / Mobile
+
+```bash
+pnpm dev:android
+pnpm dev:ios
 ```
 
 ### Firebase 接线状态

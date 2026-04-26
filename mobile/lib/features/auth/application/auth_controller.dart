@@ -217,6 +217,11 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    if (_isBusy ||
+        (_status == AuthStatus.unauthenticated && _authSession == null)) {
+      return;
+    }
+
     final currentSession = _authSession;
 
     await _runBusy(() async {
@@ -230,6 +235,14 @@ class AuthController extends ChangeNotifier {
 
       await _clearSession();
     });
+  }
+
+  Future<void> handleSessionRevoked({String message = '当前设备已退出登录'}) async {
+    if (_status == AuthStatus.unauthenticated && _authSession == null) {
+      return;
+    }
+
+    await _clearSession(message);
   }
 
   Future<void> _runBusy(Future<void> Function() action) async {

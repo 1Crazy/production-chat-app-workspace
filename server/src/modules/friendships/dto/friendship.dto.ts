@@ -29,6 +29,7 @@ export interface FriendRequestView {
   direction: 'incoming' | 'outgoing';
   status: 'pending' | 'accepted' | 'rejected' | 'ignored';
   message: string | null;
+  rejectReason: string | null;
   createdAt: string;
   respondedAt: string | null;
   counterparty: UserDiscoveryProfileDto;
@@ -74,6 +75,7 @@ export function toFriendRequestView(params: {
     direction: params.direction,
     status: effectiveStatus,
     message: params.request.message,
+    rejectReason: params.request.rejectReason,
     createdAt: params.request.createdAt.toISOString(),
     respondedAt: params.request.respondedAt?.toISOString() ?? null,
     counterparty: params.counterparty,

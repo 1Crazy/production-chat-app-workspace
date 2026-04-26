@@ -87,14 +87,19 @@ export class ConversationViewService {
     conversationId: string,
     requesterUserId: string,
   ): Promise<number> {
-    const conversation =
-      await this.chatModelRepository.getConversationOrThrow(conversationId);
     const cursor = await this.chatModelRepository.findReadCursor(
       conversationId,
       requesterUserId,
     );
 
-    return Math.max(conversation.latestSequence - (cursor?.lastReadSequence ?? 0), 0);
+    return (
+      await this.chatModelRepository.listMessages(conversationId)
+    ).filter((message) => {
+      return (
+        (message.status != 'failed' || message.senderId == requesterUserId) &&
+        message.sequence > (cursor?.lastReadSequence ?? 0)
+      );
+    }).length;
   }
 
   private async buildConversationSummaryView(
@@ -103,8 +108,14 @@ export class ConversationViewService {
   ): Promise<ConversationSummaryView> {
     const conversation =
       await this.chatModelRepository.getConversationOrThrow(conversationId);
-    const latestMessage =
-      await this.chatModelRepository.findLatestMessage(conversationId);
+    const latestMessage = (
+      await this.chatModelRepository.listMessages(conversationId)
+    )
+        .filter((message) => {
+          return message.status != 'failed' || message.senderId == requesterUserId;
+        })
+        .at(-1) ?? null;
+    const latestVisibleSequence = latestMessage?.sequence ?? 0;
 
     return toConversationSummaryView({
       id: conversation.id,
@@ -115,7 +126,7 @@ export class ConversationViewService {
           conversation.id,
         )
       ).length,
-      latestSequence: conversation.latestSequence,
+      latestSequence: latestVisibleSequence,
       lastMessagePreview: this.buildLastMessagePreview(latestMessage),
       lastMessageAt: latestMessage?.createdAt ?? null,
       unreadCount: await this.getUnreadCount(conversation.id, requesterUserId),

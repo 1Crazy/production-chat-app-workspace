@@ -8,9 +8,7 @@ abstract class FriendshipRepository {
     required String accessToken,
   });
 
-  Future<int> fetchUnreadIncomingRequestCount({
-    required String accessToken,
-  });
+  Future<int> fetchUnreadIncomingRequestCount({required String accessToken});
 
   Future<List<FriendRequestSummary>> fetchOutgoingRequests({
     required String accessToken,
@@ -32,11 +30,15 @@ abstract class FriendshipRepository {
     required String requestId,
   });
 
-  Future<void> markIncomingRequestsViewed({
-    required String accessToken,
-  });
+  Future<void> markIncomingRequestsViewed({required String accessToken});
 
   Future<void> rejectFriendRequest({
+    required String accessToken,
+    required String requestId,
+    String? rejectReason,
+  });
+
+  Future<void> deleteFriendRequestRecord({
     required String accessToken,
     required String requestId,
   });

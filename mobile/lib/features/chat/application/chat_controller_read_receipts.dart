@@ -4,7 +4,9 @@ extension ChatControllerReadReceipts on ChatController {
   String? readReceiptCaptionFor(ChatMessage message) {
     final sequence = message.sequence;
 
-    if (message.senderId != _currentUserId || sequence == null) {
+    if (message.senderId != _currentUserId ||
+        sequence == null ||
+        message.deliveryState == ChatMessageDeliveryState.failed) {
       return null;
     }
 
@@ -24,7 +26,9 @@ extension ChatControllerReadReceipts on ChatController {
   List<String> readReceiptMembersFor(ChatMessage message) {
     final sequence = message.sequence;
 
-    if (sequence == null || message.senderId != _currentUserId) {
+    if (sequence == null ||
+        message.senderId != _currentUserId ||
+        message.deliveryState == ChatMessageDeliveryState.failed) {
       return const [];
     }
 
@@ -40,7 +44,8 @@ extension ChatControllerReadReceipts on ChatController {
 
     if (conversation == null ||
         sequence == null ||
-        message.senderId != _currentUserId) {
+        message.senderId != _currentUserId ||
+        message.deliveryState == ChatMessageDeliveryState.failed) {
       return const [];
     }
 

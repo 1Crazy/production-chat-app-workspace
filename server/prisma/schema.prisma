@@ -43,10 +43,13 @@ model FriendRequest {
   addresseeId String   @map("addressee_id")
   status      String   @default("pending")
   message     String?
+  rejectReason String? @map("reject_reason")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   respondedAt DateTime? @map("responded_at")
   ignoredByAddresseeAt DateTime? @map("ignored_by_addressee_at")
+  hiddenByRequesterAt DateTime? @map("hidden_by_requester_at")
+  hiddenByAddresseeAt DateTime? @map("hidden_by_addressee_at")
   requester   User     @relation("FriendRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   addressee   User     @relation("FriendRequestAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
 
@@ -60,6 +63,8 @@ model Friendship {
   id        String   @id @default(uuid())
   userAId   String   @map("user_a_id")
   userBId   String   @map("user_b_id")
+  hiddenByUserAAt DateTime? @map("hidden_by_user_a_at")
+  hiddenByUserBAt DateTime? @map("hidden_by_user_b_at")
   createdAt DateTime @default(now()) @map("created_at")
   userA     User     @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
   userB     User     @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
@@ -140,6 +145,7 @@ model Message {
   status          String
   sequence        Int
   content         Json
+  failureReason   String?      @map("failure_reason")
   createdAt       DateTime     @default(now()) @map("created_at")
   updatedAt       DateTime     @updatedAt @map("updated_at")
   conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)

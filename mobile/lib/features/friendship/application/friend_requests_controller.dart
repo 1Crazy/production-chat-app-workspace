@@ -4,9 +4,8 @@ import 'package:production_chat_app/features/friendship/domain/repositories/frie
 import 'package:production_chat_app/shared/network/api_client.dart';
 
 class FriendRequestsController extends ChangeNotifier {
-  FriendRequestsController({
-    required FriendshipRepository friendshipRepository,
-  }) : _friendshipRepository = friendshipRepository;
+  FriendRequestsController({required FriendshipRepository friendshipRepository})
+    : _friendshipRepository = friendshipRepository;
 
   final FriendshipRepository _friendshipRepository;
 
@@ -86,9 +85,24 @@ class FriendRequestsController extends ChangeNotifier {
   Future<void> rejectRequest({
     required String accessToken,
     required String requestId,
+    String? rejectReason,
   }) async {
     await _runMutation(() async {
       await _friendshipRepository.rejectFriendRequest(
+        accessToken: accessToken,
+        requestId: requestId,
+        rejectReason: rejectReason,
+      );
+      await load(accessToken: accessToken, silent: true);
+    });
+  }
+
+  Future<void> deleteRequestRecord({
+    required String accessToken,
+    required String requestId,
+  }) async {
+    await _runMutation(() async {
+      await _friendshipRepository.deleteFriendRequestRecord(
         accessToken: accessToken,
         requestId: requestId,
       );

@@ -107,12 +107,23 @@ extension _AppShellConversationActions on _AppShellState {
       return;
     }
 
+    final clearedUnreadCount = conversation.unreadCount > _totalUnreadCount
+        ? _totalUnreadCount
+        : conversation.unreadCount;
+    final nextConversation = conversation.copyWith(unreadCount: 0);
+
     _updateShellState(() {
-      _selectedConversation = conversation;
+      _selectedConversation = nextConversation;
       _currentIndex = 0;
+      _totalUnreadCount -= clearedUnreadCount;
+      _knownConversationLatestSequenceById = {
+        ..._knownConversationLatestSequenceById,
+        nextConversation.id: nextConversation.latestSequence,
+      };
       _conversationReloadToken += 1;
       _chatReloadToken += 1;
     });
+    _syncAppBadgeCount(_totalUnreadCount);
   }
 
   Future<void> _showConversationComposerSheet(String accessToken) async {

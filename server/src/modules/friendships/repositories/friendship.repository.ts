@@ -46,6 +46,8 @@ export abstract class FriendshipRepository {
     friendUserId: string;
   }): Promise<FriendshipEntity>;
 
+  abstract saveFriendship(entity: FriendshipEntity): Promise<void>;
+
   abstract findFriendshipByUserIds(params: {
     userId: string;
     friendUserId: string;

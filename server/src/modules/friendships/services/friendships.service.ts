@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 
 import { CreateFriendRequestDto } from '../dto/create-friend-request.dto';
+import { RejectFriendRequestDto } from '../dto/reject-friend-request.dto';
 import {
   friendshipStatuses,
   toFriendRequestView,
@@ -138,12 +139,13 @@ export class FriendshipsService {
       throw new ForbiddenException('目标用户未开放好友添加');
     }
 
-    if (
+    const existingFriendship =
       await this.friendshipRepository.findFriendshipByUserIds({
         userId: requester.id,
         friendUserId: targetUser.id,
-      })
-    ) {
+      });
+
+    if (existingFriendship && this.isFriendshipMutuallyVisible(existingFriendship)) {
       throw new ConflictException('你们已经是好友');
     }
 
@@ -191,9 +193,47 @@ export class FriendshipsService {
   }
 
   async rejectFriendRequest(userId: string, requestId: string) {
+    return this.rejectFriendRequestWithReason(userId, requestId, {});
+  }
+
+  async rejectFriendRequestWithReason(
+    userId: string,
+    requestId: string,
+    dto: RejectFriendRequestDto,
+  ) {
     const request = await this.getPendingIncomingRequestOrThrow(userId, requestId);
     request.status = 'rejected';
+    request.rejectReason = dto.rejectReason?.trim() || null;
     request.respondedAt = new Date();
+    await this.friendshipRepository.saveFriendRequest(request);
+
+    return {
+      success: true,
+      requestId,
+    };
+  }
+
+  async deleteFriendRequestRecord(userId: string, requestId: string) {
+    const request = await this.friendshipRepository.findFriendRequestById(
+      requestId,
+    );
+
+    if (!request) {
+      throw new NotFoundException('好友申请不存在');
+    }
+
+    if (request.requesterId === userId) {
+      request.hiddenByRequesterAt = new Date();
+    } else if (request.addresseeId === userId) {
+      request.hiddenByAddresseeAt = new Date();
+
+      if (request.status === 'pending' && request.ignoredByAddresseeAt == null) {
+        request.ignoredByAddresseeAt = new Date();
+      }
+    } else {
+      throw new NotFoundException('好友申请不存在');
+    }
+
     await this.friendshipRepository.saveFriendRequest(request);
 
     return {
@@ -254,12 +294,12 @@ export class FriendshipsService {
       });
     }
 
-    if (
-      await this.friendshipRepository.findFriendshipByUserIds({
-        userId: requesterUserId,
-        friendUserId: targetUserId,
-      })
-    ) {
+    const friendship = await this.friendshipRepository.findFriendshipByUserIds({
+      userId: requesterUserId,
+      friendUserId: targetUserId,
+    });
+
+    if (friendship && this.isFriendshipMutuallyVisible(friendship)) {
       return toFriendshipRelationshipView({
         status: 'friends',
       });
@@ -300,6 +340,20 @@ export class FriendshipsService {
     }
   }
 
+  async assertDirectConversationMessagingAllowed(
+    requesterUserId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    const friendship = await this.friendshipRepository.findFriendshipByUserIds({
+      userId: requesterUserId,
+      friendUserId: targetUserId,
+    });
+
+    if (!friendship || !this.isFriendshipMutuallyVisible(friendship)) {
+      throw new ForbiddenException('需先加好友');
+    }
+  }
+
   private async getPendingIncomingRequestOrThrow(
     userId: string,
     requestId: string,
@@ -317,5 +371,14 @@ export class FriendshipsService {
     }
 
     return request;
+  }
+
+  private isFriendshipMutuallyVisible(friendship: {
+    hiddenByUserAAt: Date | null;
+    hiddenByUserBAt: Date | null;
+  }): boolean {
+    return (
+      friendship.hiddenByUserAAt == null && friendship.hiddenByUserBAt == null
+    );
   }
 }

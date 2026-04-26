@@ -155,6 +155,9 @@ class _ContactsPageState extends State<ContactsPage> {
                           section: section,
                           onOpenDirectConversation:
                               widget.onOpenDirectConversation,
+                          onFriendshipChanged: () async {
+                            await _load(silent: true);
+                          },
                         ),
                   ],
                 ),
@@ -317,10 +320,15 @@ class _QuickActionTile extends StatelessWidget {
 }
 
 class _ContactSection extends StatelessWidget {
-  const _ContactSection({required this.section, this.onOpenDirectConversation});
+  const _ContactSection({
+    required this.section,
+    this.onOpenDirectConversation,
+    this.onFriendshipChanged,
+  });
 
   final _ContactSectionData section;
   final Future<void> Function(String handle)? onOpenDirectConversation;
+  final Future<void> Function()? onFriendshipChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -340,6 +348,7 @@ class _ContactSection extends StatelessWidget {
           _ContactTile(
             friend: contact,
             onOpenDirectConversation: onOpenDirectConversation,
+            onFriendshipChanged: onFriendshipChanged,
           ),
           if (contact != section.contacts.last)
             const Divider(height: 1, indent: 56),
@@ -350,18 +359,23 @@ class _ContactSection extends StatelessWidget {
 }
 
 class _ContactTile extends StatelessWidget {
-  const _ContactTile({required this.friend, this.onOpenDirectConversation});
+  const _ContactTile({
+    required this.friend,
+    this.onOpenDirectConversation,
+    this.onFriendshipChanged,
+  });
 
   final FriendSummary friend;
   final Future<void> Function(String handle)? onOpenDirectConversation;
+  final Future<void> Function()? onFriendshipChanged;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: () async {
-        final handle = await Navigator.of(context).push<String?>(
-          MaterialPageRoute<String?>(
+        final result = await Navigator.of(context).push<Object?>(
+          MaterialPageRoute<Object?>(
             builder: (context) {
               return RelationshipProfilePage(
                 handle: friend.profile.handle,
@@ -372,11 +386,16 @@ class _ContactTile extends StatelessWidget {
           ),
         );
 
-        if (handle == null || onOpenDirectConversation == null) {
+        if (result == true) {
+          await onFriendshipChanged?.call();
           return;
         }
 
-        await onOpenDirectConversation!(handle);
+        if (result is! String || onOpenDirectConversation == null) {
+          return;
+        }
+
+        await onOpenDirectConversation!(result);
       },
       leading: CircleAvatar(
         backgroundColor: const Color(0xFFE8EEF9),

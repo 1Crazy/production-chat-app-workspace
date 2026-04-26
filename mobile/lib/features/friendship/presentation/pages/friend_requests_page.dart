@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:production_chat_app/app/dependencies/app_dependencies_scope.dart';
 import 'package:production_chat_app/features/auth/application/auth_scope.dart';
 import 'package:production_chat_app/features/friendship/application/friend_requests_controller.dart';
+import 'package:production_chat_app/features/friendship/domain/entities/friend_request_summary.dart';
 import 'package:production_chat_app/features/friendship/domain/entities/friendship_status.dart';
 import 'package:production_chat_app/features/friendship/presentation/pages/relationship_profile_page.dart';
 import 'package:production_chat_app/features/profile/application/profile_controller.dart';
@@ -114,9 +115,17 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
                               FriendshipStatus.none
                       ? null
                       : () async {
+                          final requestMessage =
+                              await _showFriendRequestMessageComposer();
+
+                          if (requestMessage == null) {
+                            return;
+                          }
+
                           await requestsController.createFriendRequest(
                             accessToken: accessToken,
                             targetHandle: profile.handle,
+                            message: requestMessage,
                           );
                           await profileController.discoverByHandle(
                             accessToken: accessToken,
@@ -136,55 +145,38 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
                 const _EmptyPanel(message: '暂时没有新的好友申请')
               else
                 ...requestsController.incomingRequests.map((request) {
-                  final isPending = request.status == 'pending';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: _IncomingRequestCard(
-                      nickname: request.counterparty.nickname,
-                      handle: request.counterparty.handle,
-                      message: request.message,
-                      status: request.status,
-                      respondedAt: request.respondedAt,
-                      onOpenProfile: () async {
-                        await _openProfile(
-                          handle: request.counterparty.handle,
-                          displayName: request.counterparty.nickname,
-                          avatarUrl: request.counterparty.avatarUrl,
-                        );
-                      },
-                      onIgnore:
-                          accessToken == null ||
-                              requestsController.isLoading ||
-                              !isPending
-                          ? null
-                          : () async {
-                              await requestsController.ignoreRequest(
+                    child: Dismissible(
+                      key: ValueKey('incoming-${request.id}'),
+                      direction: DismissDirection.endToStart,
+                      confirmDismiss:
+                          accessToken == null || requestsController.isLoading
+                          ? (_) async => false
+                          : (_) async {
+                              await requestsController.deleteRequestRecord(
                                 accessToken: accessToken,
                                 requestId: request.id,
                               );
+                              return requestsController.errorMessage == null;
                             },
-                      onAccept:
-                          accessToken == null ||
-                              requestsController.isLoading ||
-                              !isPending
-                          ? null
-                          : () async {
-                              await requestsController.acceptRequest(
-                                accessToken: accessToken,
-                                requestId: request.id,
-                              );
-                            },
-                      onReject:
-                          accessToken == null ||
-                              requestsController.isLoading ||
-                              !isPending
-                          ? null
-                          : () async {
-                              await requestsController.rejectRequest(
-                                accessToken: accessToken,
-                                requestId: request.id,
-                              );
-                            },
+                      background: const _DeleteSwipeBackground(),
+                      child: _IncomingRequestCard(
+                        nickname: request.counterparty.nickname,
+                        handle: request.counterparty.handle,
+                        message: request.message,
+                        status: request.status,
+                        respondedAt: request.respondedAt,
+                        rejectReason: request.rejectReason,
+                        onOpenProfile: () async {
+                          await _openProfile(
+                            handle: request.counterparty.handle,
+                            displayName: request.counterparty.nickname,
+                            avatarUrl: request.counterparty.avatarUrl,
+                            initialRequest: request,
+                          );
+                        },
+                      ),
                     ),
                   );
                 }),
@@ -197,18 +189,35 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
                 ...requestsController.outgoingRequests.map((request) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: _OutgoingRequestCard(
-                      nickname: request.counterparty.nickname,
-                      handle: request.counterparty.handle,
-                      status: request.status,
-                      respondedAt: request.respondedAt,
-                      onOpenProfile: () async {
-                        await _openProfile(
-                          handle: request.counterparty.handle,
-                          displayName: request.counterparty.nickname,
-                          avatarUrl: request.counterparty.avatarUrl,
-                        );
-                      },
+                    child: Dismissible(
+                      key: ValueKey('outgoing-${request.id}'),
+                      direction: DismissDirection.endToStart,
+                      confirmDismiss:
+                          accessToken == null || requestsController.isLoading
+                          ? (_) async => false
+                          : (_) async {
+                              await requestsController.deleteRequestRecord(
+                                accessToken: accessToken,
+                                requestId: request.id,
+                              );
+                              return requestsController.errorMessage == null;
+                            },
+                      background: const _DeleteSwipeBackground(),
+                      child: _OutgoingRequestCard(
+                        nickname: request.counterparty.nickname,
+                        handle: request.counterparty.handle,
+                        status: request.status,
+                        respondedAt: request.respondedAt,
+                        rejectReason: request.rejectReason,
+                        onOpenProfile: () async {
+                          await _openProfile(
+                            handle: request.counterparty.handle,
+                            displayName: request.counterparty.nickname,
+                            avatarUrl: request.counterparty.avatarUrl,
+                            initialRequest: request,
+                          );
+                        },
+                      ),
                     ),
                   );
                 }),
@@ -237,6 +246,7 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
     required String handle,
     required String displayName,
     required String? avatarUrl,
+    FriendRequestSummary? initialRequest,
   }) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -245,11 +255,65 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> {
             handle: handle,
             displayName: displayName,
             avatarUrl: avatarUrl,
+            initialRequest: initialRequest,
           );
         },
       ),
     );
     await _load();
+  }
+
+  Future<String?> _showFriendRequestMessageComposer() async {
+    final controller = TextEditingController();
+
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                8,
+                20,
+                20 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('申请备注', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: controller,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: '可以简单介绍一下自己，选填',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () {
+                        Navigator.of(context).pop(controller.text.trim());
+                      },
+                      child: const Text('发送申请'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    return result;
   }
 
   String _relationshipLabel(FriendshipStatus status) {
@@ -359,10 +423,8 @@ class _IncomingRequestCard extends StatelessWidget {
     required this.message,
     required this.status,
     required this.respondedAt,
+    required this.rejectReason,
     this.onOpenProfile,
-    required this.onIgnore,
-    required this.onAccept,
-    required this.onReject,
   });
 
   final String nickname;
@@ -370,10 +432,8 @@ class _IncomingRequestCard extends StatelessWidget {
   final String? message;
   final String status;
   final DateTime? respondedAt;
+  final String? rejectReason;
   final Future<void> Function()? onOpenProfile;
-  final Future<void> Function()? onIgnore;
-  final Future<void> Function()? onAccept;
-  final Future<void> Function()? onReject;
 
   @override
   Widget build(BuildContext context) {
@@ -399,51 +459,23 @@ class _IncomingRequestCard extends StatelessWidget {
             Text('@$handle', style: Theme.of(context).textTheme.bodySmall),
             if (message != null && message!.trim().isNotEmpty) ...[
               const SizedBox(height: 8),
-              Text(message!),
+              Text('备注：${message!}'),
             ],
-            if (status != 'pending') ...[
-              const SizedBox(height: 8),
-              Text(
-                _historyLabel(),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: const Color(0xFF98A2B3)),
-              ),
-            ],
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: onIgnore == null
-                        ? null
-                        : () async {
-                            await onIgnore!();
-                          },
-                    child: const Text('忽略'),
+                  child: Text(
+                    _historyLabel(),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF98A2B3),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: onReject == null
-                        ? null
-                        : () async {
-                            await onReject!();
-                          },
-                    child: const Text('拒绝'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: onAccept == null
-                        ? null
-                        : () async {
-                            await onAccept!();
-                          },
-                    child: const Text('接受'),
-                  ),
+                const SizedBox(width: 8),
+                _StatusBadge(
+                  label: status == 'pending' ? '待处理' : _shortStatusLabel(),
+                  color: _statusColor(),
                 ),
               ],
             ),
@@ -467,7 +499,35 @@ class _IncomingRequestCard extends StatelessWidget {
         return '你已忽略该好友申请';
       case 'pending':
       default:
-        return '等待你处理';
+        return '点击查看详情后处理';
+    }
+  }
+
+  String _shortStatusLabel() {
+    switch (status) {
+      case 'accepted':
+        return '已通过';
+      case 'rejected':
+        return '已拒绝';
+      case 'ignored':
+        return '已忽略';
+      case 'pending':
+      default:
+        return '待处理';
+    }
+  }
+
+  Color _statusColor() {
+    switch (status) {
+      case 'accepted':
+        return const Color(0xFF12B76A);
+      case 'rejected':
+        return const Color(0xFFF04438);
+      case 'ignored':
+        return const Color(0xFF98A2B3);
+      case 'pending':
+      default:
+        return const Color(0xFF2F6BFF);
     }
   }
 }
@@ -478,6 +538,7 @@ class _OutgoingRequestCard extends StatelessWidget {
     required this.handle,
     required this.status,
     required this.respondedAt,
+    required this.rejectReason,
     this.onOpenProfile,
   });
 
@@ -485,6 +546,7 @@ class _OutgoingRequestCard extends StatelessWidget {
   final String handle;
   final String status;
   final DateTime? respondedAt;
+  final String? rejectReason;
   final Future<void> Function()? onOpenProfile;
 
   @override
@@ -519,7 +581,9 @@ class _OutgoingRequestCard extends StatelessWidget {
       case 'accepted':
         return '对方已通过你的好友申请$timeLabel';
       case 'rejected':
-        return '对方已拒绝你的好友申请$timeLabel';
+        return rejectReason == null || rejectReason!.trim().isEmpty
+            ? '对方已拒绝你的好友申请$timeLabel'
+            : '对方已拒绝你的好友申请$timeLabel\n拒绝理由：$rejectReason';
       case 'pending':
       default:
         return '等待对方处理';
@@ -566,6 +630,48 @@ class _EmptyPanel extends StatelessWidget {
         border: Border.all(color: const Color(0xFFF0F2F7)),
       ),
       child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
+    );
+  }
+}
+
+class _DeleteSwipeBackground extends StatelessWidget {
+  const _DeleteSwipeBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF04438),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }

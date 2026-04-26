@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:production_chat_app/features/chat/domain/entities/chat_message.dart';
 import 'package:production_chat_app/shared/network/api_client.dart';
@@ -73,11 +74,7 @@ class ChatRealtimeService implements ChatRealtime {
 
     final socket = io.io(
       _buildNamespaceUrl(_baseUrl),
-      io.OptionBuilder()
-          .setTransports(['websocket'])
-          .disableAutoConnect()
-          .setExtraHeaders({'Authorization': 'Bearer $accessToken'})
-          .build(),
+      _buildSocketOptions(accessToken),
     );
 
     _registerSocketListeners(socket);
@@ -202,5 +199,24 @@ class ChatRealtimeService implements ChatRealtime {
     ];
 
     return uri.replace(pathSegments: pathSegments).toString();
+  }
+
+  @visibleForTesting
+  Map<String, dynamic> buildSocketOptionsForTest({
+    required String accessToken,
+  }) {
+    return _buildSocketOptions(accessToken);
+  }
+
+  Map<String, dynamic> _buildSocketOptions(String accessToken) {
+    return io.OptionBuilder()
+        .setTransports(['websocket'])
+        .disableAutoConnect()
+        // 浏览器 websocket 不会可靠携带自定义 Authorization 头，
+        // 因此 realtime 握手必须显式通过 auth.token 传 access token。
+        .setAuth({'token': accessToken})
+        // 原生平台继续保留 Authorization 头，兼容现有后端提取逻辑。
+        .setExtraHeaders({'Authorization': 'Bearer $accessToken'})
+        .build();
   }
 }

@@ -11,7 +11,9 @@ class FriendshipRepositoryImpl implements FriendshipRepository {
   final FriendshipRemoteDataSource _remoteDataSource;
 
   @override
-  Future<List<FriendSummary>> fetchFriends({required String accessToken}) async {
+  Future<List<FriendSummary>> fetchFriends({
+    required String accessToken,
+  }) async {
     final dtos = await _remoteDataSource.fetchFriends(accessToken: accessToken);
     return dtos.map((item) => item.toEntity()).toList(growable: false);
   }
@@ -27,9 +29,7 @@ class FriendshipRepositoryImpl implements FriendshipRepository {
   }
 
   @override
-  Future<int> fetchUnreadIncomingRequestCount({
-    required String accessToken,
-  }) {
+  Future<int> fetchUnreadIncomingRequestCount({required String accessToken}) {
     return _remoteDataSource.fetchUnreadIncomingRequestCount(
       accessToken: accessToken,
     );
@@ -81,9 +81,7 @@ class FriendshipRepositoryImpl implements FriendshipRepository {
   }
 
   @override
-  Future<void> markIncomingRequestsViewed({
-    required String accessToken,
-  }) {
+  Future<void> markIncomingRequestsViewed({required String accessToken}) {
     return _remoteDataSource.markIncomingRequestsViewed(
       accessToken: accessToken,
     );
@@ -93,8 +91,21 @@ class FriendshipRepositoryImpl implements FriendshipRepository {
   Future<void> rejectFriendRequest({
     required String accessToken,
     required String requestId,
+    String? rejectReason,
   }) {
     return _remoteDataSource.rejectFriendRequest(
+      accessToken: accessToken,
+      requestId: requestId,
+      rejectReason: rejectReason,
+    );
+  }
+
+  @override
+  Future<void> deleteFriendRequestRecord({
+    required String accessToken,
+    required String requestId,
+  }) {
+    return _remoteDataSource.deleteFriendRequestRecord(
       accessToken: accessToken,
       requestId: requestId,
     );
