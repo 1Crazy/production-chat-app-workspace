@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { parseCorsAllowedOrigins } from './cors.util';
 import type { AppEnvironment } from './env.schema';
+import { parseTrustProxySetting } from './trust-proxy.util';
 
 @Injectable()
 export class AppConfigService {
@@ -18,6 +19,10 @@ export class AppConfigService {
 
   get port(): number {
     return this.getOrThrow('port');
+  }
+
+  get trustProxy() {
+    return parseTrustProxySetting(this.getOptional('trustProxy'));
   }
 
   get corsAllowedOrigins(): string[] {

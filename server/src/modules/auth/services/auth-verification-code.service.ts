@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { argon2id, hash, verify } from 'argon2';
 
 import type { VerificationCodePurpose } from '../entities/verification-code.entity';
 import { AuthRepository } from '../repositories/auth.repository';
@@ -27,6 +28,8 @@ export class AuthVerificationCodeService {
     expiresInSeconds: number;
   }> {
     const verificationCode = this.generateVerificationCode();
+    const verificationCodeHash =
+      await this.hashVerificationCode(verificationCode);
     const expiresAt = new Date(
       Date.now() + this.verificationCodeTtlSeconds * 1000,
     );
@@ -34,7 +37,7 @@ export class AuthVerificationCodeService {
     await this.authRepository.createVerificationCode(
       params.identifier,
       params.purpose,
-      verificationCode,
+      verificationCodeHash,
       expiresAt,
     );
 
@@ -87,7 +90,13 @@ export class AuthVerificationCodeService {
       throw new BadRequestException(`${purposeLabel}验证码已过期，请重新获取`);
     }
 
-    if (verificationCode.code !== code.trim()) {
+    const normalizedCode = code.trim();
+    const codeMatched = await this.verifyStoredVerificationCode(
+      verificationCode.code,
+      normalizedCode,
+    );
+
+    if (!codeMatched) {
       throw new BadRequestException(`${purposeLabel}验证码不正确`);
     }
 
@@ -98,6 +107,21 @@ export class AuthVerificationCodeService {
   private generateVerificationCode(): string {
     // 使用密码学安全的随机数替代 Math.random，防止预测。
     return `${randomInt(100000, 1000000)}`;
+  }
+
+  private hashVerificationCode(code: string): Promise<string> {
+    return hash(code, {
+      type: argon2id,
+    });
+  }
+
+  private async verifyStoredVerificationCode(
+    storedCode: string,
+    candidateCode: string,
+  ): Promise<boolean> {
+    return storedCode.startsWith('$argon2')
+      ? verify(storedCode, candidateCode)
+      : false;
   }
 
   private buildAttemptActorKey(identifier: string, sourceKey: string): string {

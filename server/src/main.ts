@@ -14,8 +14,10 @@ async function bootstrap(): Promise<void> {
   });
   const config = app.get(AppConfigService);
   const logger = app.get(AppLoggerService);
+  const expressApp = app.getHttpAdapter().getInstance();
 
   app.useLogger(logger);
+  expressApp.set('trust proxy', config.trustProxy);
 
   // 安全响应头：添加 CSP、HSTS、X-Content-Type-Options 等 HTTP 安全头。
   app.use(helmet());

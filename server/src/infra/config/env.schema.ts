@@ -4,6 +4,7 @@ export interface AppEnvironment {
   readonly appName: string;
   readonly nodeEnv: string;
   readonly port: number;
+  readonly trustProxy?: string;
   readonly corsAllowedOrigins: string;
   readonly databaseUrl: string;
   readonly redisUrl: string;
@@ -65,6 +66,7 @@ export function validateEnv(
   }
 
   const nodeEnv = String(rawConfig.NODE_ENV);
+  const trustProxy = readOptionalString(rawConfig.TRUST_PROXY);
   const authDebugCodeEnabled = readBoolean(
     rawConfig.AUTH_DEBUG_CODE_ENABLED,
     nodeEnv !== 'production',
@@ -118,19 +120,55 @@ export function validateEnv(
 
   assertCorsAllowedOrigins(nodeEnv, parsedCorsAllowedOrigins);
 
+  const databaseUrl = String(rawConfig.DATABASE_URL);
+  const jwtAccessSecret = String(rawConfig.JWT_ACCESS_SECRET);
+  const jwtRefreshSecret = String(rawConfig.JWT_REFRESH_SECRET);
+  const s3AccessKey = String(rawConfig.S3_ACCESS_KEY);
+  const s3SecretKey = String(rawConfig.S3_SECRET_KEY);
+
+  if (nodeEnv === 'production') {
+    assertStrongProductionSecret('JWT_ACCESS_SECRET', jwtAccessSecret, {
+      minLength: 32,
+      disallowedValues: [
+        'replace-with-production-access-secret',
+        'access-secret',
+        'secret',
+        'changeme',
+      ],
+    });
+    assertStrongProductionSecret('JWT_REFRESH_SECRET', jwtRefreshSecret, {
+      minLength: 32,
+      disallowedValues: [
+        'replace-with-production-refresh-secret',
+        'refresh-secret',
+        'secret',
+        'changeme',
+      ],
+    });
+    assertStrongProductionSecret('S3_ACCESS_KEY', s3AccessKey, {
+      disallowedValues: ['minioadmin', 'admin', 'changeme'],
+    });
+    assertStrongProductionSecret('S3_SECRET_KEY', s3SecretKey, {
+      minLength: 12,
+      disallowedValues: ['minioadmin', 'secret', 'changeme'],
+    });
+    assertStrongProductionDatabaseUrl(databaseUrl);
+  }
+
   return {
     appName: String(rawConfig.APP_NAME),
     nodeEnv,
     port: Number(rawConfig.PORT),
+    trustProxy,
     corsAllowedOrigins,
-    databaseUrl: String(rawConfig.DATABASE_URL),
+    databaseUrl,
     redisUrl: String(rawConfig.REDIS_URL),
-    jwtAccessSecret: String(rawConfig.JWT_ACCESS_SECRET),
-    jwtRefreshSecret: String(rawConfig.JWT_REFRESH_SECRET),
+    jwtAccessSecret,
+    jwtRefreshSecret,
     s3Endpoint: String(rawConfig.S3_ENDPOINT),
     s3Bucket: String(rawConfig.S3_BUCKET),
-    s3AccessKey: String(rawConfig.S3_ACCESS_KEY),
-    s3SecretKey: String(rawConfig.S3_SECRET_KEY),
+    s3AccessKey,
+    s3SecretKey,
     fcmProjectId: readOptionalString(rawConfig.FCM_PROJECT_ID),
     fcmClientEmail: readOptionalString(rawConfig.FCM_CLIENT_EMAIL),
     fcmPrivateKey: readOptionalString(rawConfig.FCM_PRIVATE_KEY),
@@ -232,5 +270,62 @@ function readNumber(value: unknown, fallback: number): number {
   }
 
   const parsed = Number(value.trim());
+
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function assertStrongProductionSecret(
+  key: string,
+  value: string,
+  options: {
+    minLength?: number;
+    disallowedValues: string[];
+  },
+): void {
+  const normalized = value.trim();
+  const lowerCased = normalized.toLowerCase();
+
+  if (
+    options.minLength !== undefined &&
+    normalized.length < options.minLength
+  ) {
+    throw new Error(
+      `${key} must be at least ${options.minLength} characters in production`,
+    );
+  }
+
+  if (options.disallowedValues.includes(lowerCased)) {
+    throw new Error(
+      `${key} must not use a known default or placeholder value in production`,
+    );
+  }
+}
+
+function assertStrongProductionDatabaseUrl(databaseUrl: string): void {
+  let parsedDatabaseUrl: URL;
+
+  try {
+    parsedDatabaseUrl = new URL(databaseUrl);
+  } catch {
+    throw new Error('DATABASE_URL must be a valid URL in production');
+  }
+
+  const password = decodeURIComponent(parsedDatabaseUrl.password).trim();
+  const lowerCasedPassword = password.toLowerCase();
+
+  if (
+    ['chat_prod', 'postgres', 'password', 'admin', 'changeme'].includes(
+      lowerCasedPassword,
+    )
+  ) {
+    throw new Error(
+      'DATABASE_URL must not use a weak database password in production',
+    );
+  }
+
+  if (password.length < 12) {
+    throw new Error(
+      'DATABASE_URL must use a database password with at least 12 characters in production',
+    );
+  }
 }

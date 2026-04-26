@@ -201,6 +201,49 @@ describe('AuthService', () => {
     ).resolves.not.toHaveProperty('debugCode');
   });
 
+  it('should store newly issued verification codes as hashes', async () => {
+    const fixture = createFixture({
+      authRateLimitEnabled: false,
+    });
+
+    const response = await fixture.service.requestCode({
+      identifier: 'alice@example.com',
+      purpose: 'register',
+    });
+    const storedCode = await fixture.authRepository.findVerificationCode(
+      'alice@example.com',
+      'register',
+    );
+
+    expect(storedCode).not.toBeNull();
+    expect(storedCode?.code).toBeDefined();
+    expect(storedCode?.code).not.toBe(requireDebugCode(response));
+    expect(storedCode?.code.startsWith('$argon2')).toBe(true);
+  });
+
+  it('should reject plaintext verification codes stored in legacy format', async () => {
+    const fixture = createFixture({
+      authRateLimitEnabled: false,
+    });
+
+    await fixture.authRepository.createVerificationCode(
+      'alice@example.com',
+      'register',
+      '123456',
+      new Date(Date.now() + 10 * 60 * 1000),
+    );
+
+    await expect(
+      fixture.service.register({
+        identifier: 'alice@example.com',
+        code: '123456',
+        password: 'Alice1234',
+        nickname: 'Alice',
+        deviceName: 'alice-phone',
+      }),
+    ).rejects.toThrow('注册验证码不正确');
+  });
+
   it('should deliver production codes through the configured webhook', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
